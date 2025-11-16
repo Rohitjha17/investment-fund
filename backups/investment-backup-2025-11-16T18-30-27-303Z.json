@@ -1,0 +1,105 @@
+{
+  "members": [
+    {
+      "id": 3,
+      "name": "Sangam",
+      "unique_number": 2,
+      "member_code": "Sangam-1",
+      "alias_name": "choudhary",
+      "village": "gor",
+      "town": "gamma",
+      "percentage_of_return": 2,
+      "date_of_return": 30,
+      "referral_name": null,
+      "referral_percent": 0,
+      "created_at": "2025-11-16T04:44:13.905Z",
+      "updated_at": "2025-11-16T04:44:13.905Z"
+    },
+    {
+      "id": 4,
+      "name": "d",
+      "unique_number": 3,
+      "member_code": "d-1",
+      "alias_name": "d",
+      "village": "d",
+      "town": "d",
+      "percentage_of_return": 3,
+      "date_of_return": 30,
+      "referral_name": null,
+      "referral_percent": 0,
+      "created_at": "2025-11-16T18:11:37.509Z",
+      "updated_at": "2025-11-16T18:11:51.127Z"
+    }
+  ],
+  "deposits": [
+    {
+      "id": 1,
+      "member_id": 3,
+      "amount": 20000,
+      "deposit_date": "2025-11-16",
+      "percentage": null,
+      "notes": null,
+      "created_at": "2025-11-16T06:28:43.209Z"
+    },
+    {
+      "id": 2,
+      "member_id": 4,
+      "amount": 30000,
+      "deposit_date": "2025-10-16",
+      "percentage": null,
+      "notes": null,
+      "created_at": "2025-11-16T18:20:48.805Z"
+    },
+    {
+      "id": 3,
+      "member_id": 4,
+      "amount": 10000,
+      "deposit_date": "2025-10-01",
+      "percentage": 4,
+      "notes": null,
+      "created_at": "2025-11-16T18:21:35.920Z"
+    }
+  ],
+  "withdrawals": [],
+  "returns": [
+    {
+      "id": 1,
+      "member_id": 4,
+      "return_amount": 420,
+      "return_date": "2025-11-02",
+      "interest_days": 30,
+      "notes": "Automatic return for 2025-10 (1-30 day cycle)",
+      "created_at": "2025-11-16T18:20:55.463Z"
+    },
+    {
+      "id": 2,
+      "member_id": 4,
+      "return_amount": 773.33,
+      "return_date": "2025-11-02",
+      "interest_days": 30,
+      "notes": "Automatic return for 2025-10 (1-30 day cycle)",
+      "created_at": "2025-11-16T18:21:45.853Z"
+    },
+    {
+      "id": 3,
+      "member_id": 4,
+      "return_amount": 773.33,
+      "return_date": "2025-11-02",
+      "interest_days": 30,
+      "notes": "Automatic return for 2025-10 (1-30 day cycle)",
+      "created_at": "2025-11-16T18:29:54.551Z"
+    }
+  ],
+  "admins": [
+    {
+      "id": 1,
+      "username": "admin",
+      "password": "$2a$10$aI5msF2PalxvVq1gTbnbq.EJ3hwEpv3NXy4wfO0BOXCWHHPihBSGy",
+      "role": "super_admin",
+      "created_at": "2025-11-14T05:38:22.921Z"
+    }
+  ],
+  "calculated_months": [
+    "2025-10"
+  ]
+}

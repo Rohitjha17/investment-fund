@@ -1,0 +1,44 @@
+{
+  "members": [
+    {
+      "id": 3,
+      "name": "Sangam",
+      "unique_number": 2,
+      "member_code": "Sangam-1",
+      "alias_name": "choudhary",
+      "village": "gor",
+      "town": "gamma",
+      "percentage_of_return": 2,
+      "date_of_return": 30,
+      "referral_name": null,
+      "referral_percent": 0,
+      "created_at": "2025-11-16T04:44:13.905Z",
+      "updated_at": "2025-11-16T04:44:13.905Z"
+    }
+  ],
+  "deposits": [
+    {
+      "id": 1,
+      "member_id": 3,
+      "amount": 20000,
+      "deposit_date": "2025-11-16",
+      "percentage": null,
+      "notes": null,
+      "created_at": "2025-11-16T06:28:43.209Z"
+    }
+  ],
+  "withdrawals": [],
+  "returns": [],
+  "admins": [
+    {
+      "id": 1,
+      "username": "admin",
+      "password": "$2a$10$aI5msF2PalxvVq1gTbnbq.EJ3hwEpv3NXy4wfO0BOXCWHHPihBSGy",
+      "role": "super_admin",
+      "created_at": "2025-11-14T05:38:22.921Z"
+    }
+  ],
+  "calculated_months": [
+    "2025-10"
+  ]
+}
