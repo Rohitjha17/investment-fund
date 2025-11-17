@@ -33,9 +33,11 @@ export default function Dashboard() {
     village: '',
     town: '',
     percentage_of_return: '',
-    date_of_return: '',
     referral_name: '',
-    referral_percent: ''
+    referral_percent: '',
+    deposit_amount: '',
+    investment_date: '',
+    mode_of_payment: ''
   });
 
   useEffect(() => {
@@ -113,9 +115,11 @@ export default function Dashboard() {
       village: '',
       town: '',
       percentage_of_return: '',
-      date_of_return: '',
       referral_name: '',
-      referral_percent: ''
+      referral_percent: '',
+      deposit_amount: '',
+      investment_date: '',
+      mode_of_payment: ''
     });
     setShowAddModal(true);
   };
@@ -128,9 +132,11 @@ export default function Dashboard() {
       village: member.village || '',
       town: member.town || '',
       percentage_of_return: member.percentage_of_return.toString(),
-      date_of_return: member.date_of_return.toString(),
       referral_name: member.referral_name || '',
-      referral_percent: member.referral_percent.toString()
+      referral_percent: member.referral_percent.toString(),
+      deposit_amount: '',
+      investment_date: '',
+      mode_of_payment: ''
     });
     setShowAddModal(true);
   };
@@ -560,16 +566,7 @@ export default function Dashboard() {
                     value={formData.percentage_of_return}
                     onChange={(e) => setFormData({ ...formData, percentage_of_return: e.target.value })}
                     required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Date of Return (days) *</label>
-                  <input
-                    type="number"
-                    value={formData.date_of_return}
-                    onChange={(e) => setFormData({ ...formData, date_of_return: e.target.value })}
-                    required
+                    placeholder="e.g., 3 for 3%"
                   />
                 </div>
 
@@ -589,8 +586,73 @@ export default function Dashboard() {
                     step="0.01"
                     value={formData.referral_percent}
                     onChange={(e) => setFormData({ ...formData, referral_percent: e.target.value })}
+                    placeholder="e.g., 0.5 for 0.5%"
                   />
                 </div>
+
+                {!editingMember && (
+                  <>
+                    <div style={{
+                      marginTop: '24px',
+                      padding: '16px',
+                      background: '#eff6ff',
+                      borderRadius: '12px',
+                      border: '2px solid #3b82f6'
+                    }}>
+                      <h3 style={{ 
+                        margin: '0 0 16px 0', 
+                        fontSize: '16px', 
+                        fontWeight: 700, 
+                        color: '#1e40af',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                      }}>
+                        💰 Initial Deposit Details
+                      </h3>
+
+                      <div className="form-group" style={{ marginBottom: '16px' }}>
+                        <label>Deposit Amount *</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={formData.deposit_amount}
+                          onChange={(e) => setFormData({ ...formData, deposit_amount: e.target.value })}
+                          required
+                          placeholder="Enter deposit amount"
+                        />
+                      </div>
+
+                      <div className="form-group" style={{ marginBottom: '16px' }}>
+                        <label>Investment Date *</label>
+                        <input
+                          type="date"
+                          value={formData.investment_date}
+                          onChange={(e) => setFormData({ ...formData, investment_date: e.target.value })}
+                          required
+                          style={{ fontSize: '16px', padding: '12px' }}
+                        />
+                      </div>
+
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label>Mode of Payment *</label>
+                        <select
+                          value={formData.mode_of_payment}
+                          onChange={(e) => setFormData({ ...formData, mode_of_payment: e.target.value })}
+                          required
+                          style={{ fontSize: '16px', padding: '12px' }}
+                        >
+                          <option value="">Select payment mode</option>
+                          <option value="Cash">Cash</option>
+                          <option value="Bank Transfer">Bank Transfer</option>
+                          <option value="UPI">UPI</option>
+                          <option value="Cheque">Cheque</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
                   <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
