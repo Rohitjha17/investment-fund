@@ -2,11 +2,10 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import db from '@/lib/db';
 import { parseDate } from '@/lib/utils';
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
-  // GET all withdrawals
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
     try {
-      const withdrawals = db.getWithdrawals();
+      const withdrawals = await db.getWithdrawals();
       return res.status(200).json(withdrawals);
     } catch (error) {
       console.error('Error fetching withdrawals:', error);
@@ -14,7 +13,6 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     }
   }
 
-  // POST create withdrawal
   if (req.method === 'POST') {
     try {
       const { member_id, amount, withdrawal_date, notes } = req.body;
@@ -25,7 +23,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
 
       const parsedDate = parseDate(withdrawal_date);
 
-      const withdrawal = db.createWithdrawal({
+      const withdrawal = await db.createWithdrawal({
         member_id,
         amount,
         withdrawal_date: parsedDate,

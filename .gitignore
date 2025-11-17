@@ -29,11 +29,6 @@ yarn-error.log*
 *.db
 *.db-journal
 
-# Keep investment.json and backups (important data files)
-!investment.json
-!backups/
-!backups/*.json
-
 # IDE
 .vscode/
 .idea/

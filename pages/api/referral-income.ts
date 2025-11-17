@@ -2,7 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import db from '@/lib/db';
 import { calculateComplexInterest, getCurrentMonthWindow } from '@/lib/utils';
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -14,12 +14,11 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       return res.status(400).json({ error: 'Member ID is required' });
     }
 
-    const referrer = db.getMember(parseInt(member_id));
+    const referrer = await db.getMember(parseInt(member_id, 10));
     if (!referrer) {
       return res.status(404).json({ error: 'Member not found' });
     }
 
-    // Use provided dates OR default to current month (1-30)
     let startDate: Date;
     let endDate: Date;
 
@@ -27,42 +26,40 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       startDate = new Date(start_date);
       endDate = new Date(end_date);
     } else {
-      // Default to current month window (1-30) for referral income
       const window = getCurrentMonthWindow();
       startDate = window.start;
       endDate = window.end;
     }
 
-    // Find all members referred by this person (members who have this person as referral_name)
-    const allMembers = db.getMembers();
-    const referredMembers = allMembers.filter((m: any) => 
-      m.referral_name && 
-      (m.referral_name.toLowerCase() === referrer.name.toLowerCase() ||
-       m.referral_name.toLowerCase() === `${referrer.name} #${referrer.unique_number || referrer.id}`.toLowerCase())
-    );
+    const allMembers = await db.getMembers();
+    const referredMembers = allMembers.filter((m: any) => {
+      if (!m.referral_name) return false;
+      const normalizedReferral = m.referral_name.toLowerCase();
+      return (
+        normalizedReferral === referrer.name.toLowerCase() ||
+        normalizedReferral === `${referrer.name} #${referrer.unique_number || referrer.id}`.toLowerCase()
+      );
+    });
 
     let totalReferralIncome = 0;
     const referralBreakdown: any[] = [];
 
-    referredMembers.forEach((basicReferred: any) => {
-      // Load full member with deposits and withdrawals
-      const referred = db.getMember(basicReferred.id) as any;
-      if (!referred) return;
+    for (const basicReferred of referredMembers) {
+      const referred = await db.getMember(basicReferred.id);
+      if (!referred) continue;
 
       const deposits = (referred.deposits || []).map((d: any) => ({
         amount: d.amount,
         date: d.deposit_date,
-        percentage: d.percentage !== null && d.percentage !== undefined 
-          ? d.percentage 
-          : referred.percentage_of_return
+        percentage:
+          d.percentage !== null && d.percentage !== undefined ? d.percentage : referred.percentage_of_return
       }));
-      
+
       const withdrawals = (referred.withdrawals || []).map((w: any) => ({
         amount: w.amount,
         date: w.withdrawal_date
       }));
 
-      // Calculate interest earned by referred member (1-30 day cycle)
       const interestEarned = calculateComplexInterest(
         deposits,
         withdrawals,
@@ -71,7 +68,6 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         endDate
       );
 
-      // Calculate referral income for this person
       const referralPercent = referred.referral_percent || 0;
       const referralIncome = (interestEarned * referralPercent) / 100;
 
@@ -84,10 +80,10 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         referral_percent: referralPercent,
         referral_income: referralIncome
       });
-    });
+    }
 
     return res.status(200).json({
-      referrer_id: parseInt(member_id),
+      referrer_id: parseInt(member_id, 10),
       referrer_name: referrer.name,
       total_referral_income: Math.round(totalReferralIncome * 100) / 100,
       referred_count: referredMembers.length,

@@ -1,20 +1,19 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import db from '@/lib/db';
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { id } = req.query;
 
   if (!id || typeof id !== 'string') {
     return res.status(400).json({ error: 'Invalid member ID' });
   }
 
-  const memberId = parseInt(id);
+  const memberId = parseInt(id, 10);
 
-  // GET single member
   if (req.method === 'GET') {
     try {
-      const member = db.getMember(memberId);
-      
+      const member = await db.getMember(memberId);
+
       if (!member) {
         return res.status(404).json({ error: 'Member not found' });
       }
@@ -26,7 +25,6 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     }
   }
 
-  // PUT update member
   if (req.method === 'PUT') {
     try {
       const {
@@ -40,7 +38,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         referral_percent
       } = req.body;
 
-      const success = db.updateMember(memberId, {
+      const success = await db.updateMember(memberId, {
         name,
         alias_name,
         village,
@@ -62,10 +60,9 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     }
   }
 
-  // DELETE member
   if (req.method === 'DELETE') {
     try {
-      const success = db.deleteMember(memberId);
+      const success = await db.deleteMember(memberId);
 
       if (!success) {
         return res.status(404).json({ error: 'Member not found' });

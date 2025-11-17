@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import db from '@/lib/db';
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -14,9 +14,8 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     }
 
     const query = q.toLowerCase().trim();
-    const members = db.getMembers();
+    const members = await db.getMembers();
     
-    // Search in name, alias, village, town
     const results = members.filter((member: any) => {
       const nameMatch = member.name?.toLowerCase().includes(query);
       const aliasMatch = member.alias_name?.toLowerCase().includes(query);

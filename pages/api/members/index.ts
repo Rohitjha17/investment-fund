@@ -1,11 +1,10 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import db from '@/lib/db';
 
-// GET all members
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
     try {
-      const members = db.getMembers();
+      const members = await db.getMembers();
       return res.status(200).json(members);
     } catch (error) {
       console.error('Error fetching members:', error);
@@ -13,7 +12,6 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     }
   }
 
-  // POST create new member
   if (req.method === 'POST') {
     try {
       const {
@@ -33,25 +31,23 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         return res.status(400).json({ error: 'Name and percentage of return are required' });
       }
 
-      // Create member (date_of_return defaults to 30 if not provided)
-      const member = db.createMember({
+      const member = await db.createMember({
         name,
         alias_name,
         village,
         town,
         percentage_of_return,
-        date_of_return: 30, // Default to 30 days
+        date_of_return: 30,
         referral_name,
         referral_percent
       });
 
-      // If deposit details provided, create initial deposit
       if (deposit_amount && investment_date && mode_of_payment) {
-        db.createDeposit({
+        await db.createDeposit({
           member_id: member.id,
           amount: deposit_amount,
           deposit_date: investment_date,
-          percentage: null, // Use member's default percentage
+          percentage: null,
           notes: `Initial deposit - Mode: ${mode_of_payment}`
         });
       }

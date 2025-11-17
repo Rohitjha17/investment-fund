@@ -2,23 +2,22 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import db from '@/lib/db';
 import { parseDate } from '@/lib/utils';
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { id, type } = req.query;
 
   if (!id || typeof id !== 'string' || !type || typeof type !== 'string') {
     return res.status(400).json({ error: 'Invalid parameters' });
   }
 
-  const transactionId = parseInt(id);
+  const transactionId = parseInt(id, 10);
 
-  // GET single transaction
   if (req.method === 'GET') {
     try {
       let transaction = null;
       if (type === 'deposit') {
-        transaction = db.getDeposit(transactionId);
+        transaction = await db.getDeposit(transactionId);
       } else if (type === 'withdrawal') {
-        transaction = db.getWithdrawal(transactionId);
+        transaction = await db.getWithdrawal(transactionId);
       }
 
       if (!transaction) {
@@ -32,15 +31,14 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     }
   }
 
-  // PUT update transaction
   if (req.method === 'PUT') {
     try {
       let success = false;
-      
+
       if (type === 'deposit') {
         const { member_id, amount, deposit_date, percentage, notes } = req.body;
         const parsedDate = parseDate(deposit_date);
-        success = db.updateDeposit(transactionId, {
+        success = await db.updateDeposit(transactionId, {
           member_id,
           amount,
           deposit_date: parsedDate,
@@ -50,7 +48,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       } else if (type === 'withdrawal') {
         const { member_id, amount, withdrawal_date, notes } = req.body;
         const parsedDate = parseDate(withdrawal_date);
-        success = db.updateWithdrawal(transactionId, {
+        success = await db.updateWithdrawal(transactionId, {
           member_id,
           amount,
           withdrawal_date: parsedDate,
@@ -69,15 +67,14 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     }
   }
 
-  // DELETE transaction
   if (req.method === 'DELETE') {
     try {
       let success = false;
-      
+
       if (type === 'deposit') {
-        success = db.deleteDeposit(transactionId);
+        success = await db.deleteDeposit(transactionId);
       } else if (type === 'withdrawal') {
-        success = db.deleteWithdrawal(transactionId);
+        success = await db.deleteWithdrawal(transactionId);
       }
 
       if (!success) {

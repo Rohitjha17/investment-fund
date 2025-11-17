@@ -1,17 +1,20 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import db from '@/lib/db';
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
     try {
-      const { member_id, start_date, end_date } = req.query;
+      const { member_id, start_date, end_date, month } = req.query;
 
-      // Get all transactions
-      const deposits = db.getDeposits();
-      const withdrawals = db.getWithdrawals();
-      const returns = db.getReturns();
+      const [deposits, withdrawals, returns, members] = await Promise.all([
+        db.getDeposits(),
+        db.getWithdrawals(),
+        db.getReturns(),
+        db.getMembers()
+      ]);
 
-      // Combine all transactions
+      const memberMap = new Map(members.map((m: any) => [m.id, m]));
+
       const allTransactions: any[] = [
         ...deposits.map((d: any) => ({
           id: d.id,
@@ -42,7 +45,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
           created_at: w.created_at
         })),
         ...returns.map((r: any) => {
-          const member = db.getMember(r.member_id);
+          const member = memberMap.get(r.member_id);
           return {
             id: r.id,
             type: 'return',
@@ -64,26 +67,37 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         })
       ];
 
-      // Filter by member_id if provided
       let filteredTransactions = allTransactions;
       if (member_id) {
-        filteredTransactions = filteredTransactions.filter(t => t.member_id === parseInt(member_id as string));
+        filteredTransactions = filteredTransactions.filter(
+          (t) => t.member_id === parseInt(member_id as string, 10)
+        );
       }
 
-      // Filter by date range if provided
-      if (start_date && end_date) {
-        const start = new Date(start_date as string);
-        const end = new Date(end_date as string);
-        // Set end date to end of day
-        end.setHours(23, 59, 59, 999);
-        
-        filteredTransactions = filteredTransactions.filter(t => {
+      let rangeStart: Date | null = null;
+      let rangeEnd: Date | null = null;
+
+      if (month && typeof month === 'string') {
+        const [yearStr, monthStr] = month.split('-');
+        if (yearStr && monthStr) {
+          const year = parseInt(yearStr, 10);
+          const monthIndex = parseInt(monthStr, 10) - 1;
+          rangeStart = new Date(year, monthIndex, 1);
+          rangeEnd = new Date(year, monthIndex, 30, 23, 59, 59, 999);
+        }
+      } else if (start_date && end_date) {
+        rangeStart = new Date(start_date as string);
+        rangeEnd = new Date(end_date as string);
+        rangeEnd.setHours(23, 59, 59, 999);
+      }
+
+      if (rangeStart && rangeEnd) {
+        filteredTransactions = filteredTransactions.filter((t) => {
           const transactionDate = new Date(t.date);
-          return transactionDate >= start && transactionDate <= end;
+          return transactionDate >= rangeStart! && transactionDate <= rangeEnd!;
         });
       }
 
-      // Sort by date (newest first)
       filteredTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
       return res.status(200).json(filteredTransactions);

@@ -5,10 +5,17 @@ import Image from 'next/image';
 
 export default function Login() {
   const router = useRouter();
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [otp, setOtp] = useState('');
+  const [step, setStep] = useState<'login' | 'otp' | 'forgot'>('login');
+  const [infoMessage, setInfoMessage] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [forgotStage, setForgotStage] = useState<'request' | 'verify'>('request');
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotOtp, setForgotOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
 
   useEffect(() => {
     // Check if already logged in
@@ -21,16 +28,48 @@ export default function Login() {
       });
   }, [router]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const resetMessages = () => {
     setError('');
+    setInfoMessage('');
+  };
+
+  const handleLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    resetMessages();
     setLoading(true);
 
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ email, password })
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setStep('otp');
+        setInfoMessage('OTP sent to your email. Please enter it below.');
+      } else {
+        setError(data.error || 'Login failed');
+      }
+    } catch (err) {
+      setError('An error occurred. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOtpSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    resetMessages();
+    setLoading(true);
+
+    try {
+      const res = await fetch('/api/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp })
       });
 
       const data = await res.json();
@@ -38,10 +77,66 @@ export default function Login() {
       if (res.ok) {
         router.push('/dashboard');
       } else {
-        setError(data.error || 'Login failed');
+        setError(data.error || 'Invalid OTP');
       }
     } catch (err) {
-      setError('An error occurred. Please try again.');
+      setError('Failed to verify OTP. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    resetMessages();
+    setLoading(true);
+
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail })
+      });
+
+      await res.json();
+      if (res.ok) {
+        setInfoMessage('OTP sent to your email. Enter it with a new password.');
+        setForgotStage('verify');
+      } else {
+        setError('Unable to send OTP. Please try again.');
+      }
+    } catch (error) {
+      setError('Failed to send reset OTP.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    resetMessages();
+    setLoading(true);
+
+    try {
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail, otp: forgotOtp, newPassword })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setInfoMessage('Password updated successfully. Please login.');
+        setStep('login');
+        setForgotStage('request');
+        setPassword('');
+        setForgotOtp('');
+        setNewPassword('');
+      } else {
+        setError(data.error || 'Failed to reset password');
+      }
+    } catch (error) {
+      setError('Failed to reset password.');
     } finally {
       setLoading(false);
     }
@@ -261,70 +356,221 @@ export default function Login() {
             </div>
           </div>
           
-          <form onSubmit={handleSubmit} style={{ marginTop: '32px' }}>
+          <div style={{ marginTop: '32px' }}>
+            {infoMessage && (
+              <div className="alert alert-success" style={{ animation: 'slideIn 0.3s ease' }}>
+                {infoMessage}
+              </div>
+            )}
             {error && (
               <div className="alert alert-error" style={{ animation: 'slideIn 0.3s ease' }}>
                 {error}
               </div>
             )}
-            
-            <div className="form-group">
-              <label>Username</label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                placeholder="Enter your username"
-                autoComplete="username"
-                style={{ fontSize: '16px' }}
-              />
-            </div>
 
-            <div className="form-group">
-              <label>Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                placeholder="Enter your password"
-                autoComplete="current-password"
-                style={{ fontSize: '16px' }}
-              />
-            </div>
+            {step === 'login' && (
+              <form onSubmit={handleLoginSubmit}>
+                <div className="form-group">
+                  <label>Email</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    placeholder="Enter your admin email"
+                    autoComplete="email"
+                    style={{ fontSize: '16px' }}
+                  />
+                </div>
 
-            <button 
-              type="submit" 
-              className="btn btn-primary" 
-              style={{ 
-                width: '100%', 
-                marginTop: '8px',
-                padding: '14px',
-                fontSize: '16px',
-                fontWeight: 700
-              }}
-              disabled={loading}
-            >
-              {loading ? (
-                <>
-                  <span className="spinner" style={{ marginRight: '8px' }} />
-                  Logging in...
-                </>
-              ) : (
-                'Login'
-              )}
-            </button>
-          </form>
+                <div className="form-group">
+                  <label>Password</label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    placeholder="Enter your password"
+                    autoComplete="current-password"
+                    style={{ fontSize: '16px' }}
+                  />
+                </div>
 
-          <p style={{ 
-            marginTop: '24px', 
-            textAlign: 'center', 
-            color: '#64748b', 
-            fontSize: '13px',
-            opacity: 0.8
-          }}>
-            Default credentials: <strong style={{ color: '#6366f1' }}>admin</strong> / <strong style={{ color: '#6366f1' }}>admin123</strong>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{
+                    width: '100%',
+                    marginTop: '8px',
+                    padding: '14px',
+                    fontSize: '16px',
+                    fontWeight: 700
+                  }}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <span className="spinner" style={{ marginRight: '8px' }} />
+                      Sending OTP...
+                    </>
+                  ) : (
+                    'Send OTP'
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ width: '100%', marginTop: '12px' }}
+                  onClick={() => {
+                    setForgotEmail(email);
+                    setForgotStage('request');
+                    setStep('forgot');
+                    resetMessages();
+                  }}
+                >
+                  Forgot Password?
+                </button>
+              </form>
+            )}
+
+            {step === 'otp' && (
+              <form onSubmit={handleOtpSubmit}>
+                <div className="form-group">
+                  <label>Enter OTP sent to {email}</label>
+                  <input
+                    type="text"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value)}
+                    required
+                    placeholder="Enter 6-digit OTP"
+                    style={{ fontSize: '16px', letterSpacing: '4px', textAlign: 'center' }}
+                    maxLength={6}
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{ width: '100%', marginTop: '8px', padding: '14px', fontSize: '16px', fontWeight: 700 }}
+                  disabled={loading}
+                >
+                  {loading ? 'Verifying...' : 'Verify & Login'}
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ width: '100%', marginTop: '12px' }}
+                  onClick={() => {
+                    setStep('login');
+                    setOtp('');
+                    resetMessages();
+                  }}
+                >
+                  ← Back to Login
+                </button>
+              </form>
+            )}
+
+            {step === 'forgot' && (
+              <>
+                {forgotStage === 'request' && (
+                  <form onSubmit={handleForgotRequest}>
+                    <div className="form-group">
+                      <label>Registered Email</label>
+                      <input
+                        type="email"
+                        value={forgotEmail}
+                        onChange={(e) => setForgotEmail(e.target.value)}
+                        required
+                        placeholder="Enter your admin email"
+                        style={{ fontSize: '16px' }}
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className="btn btn-primary"
+                      style={{ width: '100%', padding: '14px', fontSize: '16px', fontWeight: 700 }}
+                      disabled={loading}
+                    >
+                      {loading ? 'Sending OTP...' : 'Send Reset OTP'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ width: '100%', marginTop: '12px' }}
+                      onClick={() => {
+                        setStep('login');
+                        resetMessages();
+                      }}
+                    >
+                      ← Back to Login
+                    </button>
+                  </form>
+                )}
+
+                {forgotStage === 'verify' && (
+                  <form onSubmit={handleResetPassword}>
+                    <div className="form-group">
+                      <label>OTP sent to {forgotEmail}</label>
+                      <input
+                        type="text"
+                        value={forgotOtp}
+                        onChange={(e) => setForgotOtp(e.target.value)}
+                        required
+                        placeholder="Enter OTP"
+                        style={{ fontSize: '16px', letterSpacing: '4px', textAlign: 'center' }}
+                        maxLength={6}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>New Password</label>
+                      <input
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        required
+                        placeholder="Enter new password"
+                        style={{ fontSize: '16px' }}
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className="btn btn-primary"
+                      style={{ width: '100%', padding: '14px', fontSize: '16px', fontWeight: 700 }}
+                      disabled={loading}
+                    >
+                      {loading ? 'Updating...' : 'Reset Password'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ width: '100%', marginTop: '12px' }}
+                      onClick={() => {
+                        setStep('login');
+                        setForgotStage('request');
+                        resetMessages();
+                      }}
+                    >
+                      ← Back to Login
+                    </button>
+                  </form>
+                )}
+              </>
+            )}
+          </div>
+
+          <p
+            style={{
+              marginTop: '24px',
+              textAlign: 'center',
+              color: '#64748b',
+              fontSize: '13px',
+              opacity: 0.8
+            }}
+          >
+            Default admin email: <strong style={{ color: '#6366f1' }}>admin@example.com</strong>
           </p>
         </div>
       </div>

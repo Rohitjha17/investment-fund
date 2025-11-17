@@ -2,11 +2,10 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import db from '@/lib/db';
 import { parseDate } from '@/lib/utils';
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
-  // GET all deposits
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
     try {
-      const deposits = db.getDeposits();
+      const deposits = await db.getDeposits();
       return res.status(200).json(deposits);
     } catch (error) {
       console.error('Error fetching deposits:', error);
@@ -14,7 +13,6 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     }
   }
 
-  // POST create deposit
   if (req.method === 'POST') {
     try {
       const { member_id, amount, deposit_date, percentage, notes } = req.body;
@@ -24,8 +22,8 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       }
 
       const parsedDate = parseDate(deposit_date);
-      
-      const deposit = db.createDeposit({
+
+      const deposit = await db.createDeposit({
         member_id,
         amount,
         deposit_date: parsedDate,

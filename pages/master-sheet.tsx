@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Image from 'next/image';
+import * as XLSX from 'xlsx';
 import { formatDate } from '@/lib/utils';
 
 interface Transaction {
@@ -28,11 +29,12 @@ export default function MasterSheet() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [members, setMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dateFilter, setDateFilter] = useState({
-    start_date: '',
-    end_date: ''
-  });
   const [selectedMember, setSelectedMember] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const now = new Date();
+    now.setDate(1);
+    return now;
+  });
 
   useEffect(() => {
     checkAuth();
@@ -43,7 +45,7 @@ export default function MasterSheet() {
 
   useEffect(() => {
     fetchTransactions();
-  }, [dateFilter.start_date, dateFilter.end_date, selectedMember]);
+  }, [selectedMember, selectedMonth]);
 
   const checkAuth = async () => {
     const res = await fetch('/api/auth/check');
@@ -72,44 +74,21 @@ export default function MasterSheet() {
 
   const fetchTransactions = async () => {
     try {
-      let url = '/api/master-transactions?';
+      const monthKey = `${selectedMonth.getFullYear()}-${String(selectedMonth.getMonth() + 1).padStart(2, '0')}`;
+      let url = `/api/master-transactions?month=${monthKey}&`;
       if (selectedMember) {
-        url += `member_id=${selectedMember}&`;
-      }
-      if (dateFilter.start_date && dateFilter.end_date) {
-        url += `start_date=${dateFilter.start_date}&end_date=${dateFilter.end_date}`;
+        url += `member_id=${selectedMember}`;
       }
       
       const res = await fetch(url);
       const data = await res.json();
       
-      // Master sheet shows only returns
       const filteredData = data.filter((t: Transaction) => t.transaction_type === 'return');
-      
       setTransactions(filteredData);
     } catch (error) {
       console.error('Error fetching transactions:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleCalculateMonthlyReturns = async () => {
-    try {
-      const res = await fetch('/api/calculate-monthly-returns', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      const data = await res.json();
-      if (res.ok) {
-        alert(`Success! ${data.message}\nMembers: ${data.membersCalculated}, Total: ₹${data.totalReturns}`);
-        fetchTransactions();
-      } else {
-        alert(data.error || 'Failed to calculate returns');
-      }
-    } catch (error) {
-      console.error('Error calculating monthly returns:', error);
-      alert('Failed to calculate monthly returns');
     }
   };
 
@@ -121,6 +100,39 @@ export default function MasterSheet() {
     } catch (error) {
       console.error('Error fetching members:', error);
     }
+  };
+
+  const goToMonth = (offset: number) => {
+    setSelectedMonth((prev) => {
+      const next = new Date(prev);
+      next.setMonth(next.getMonth() + offset);
+      return next;
+    });
+  };
+
+  const handleDownloadExcel = () => {
+    if (transactions.length === 0) {
+      alert('No transactions available for this month.');
+      return;
+    }
+
+    const sheetData = transactions.map((t) => ({
+      'Payment Date': formatDate(t.date),
+      Member: t.member_name,
+      'Unique #': t.unique_number ? `#${t.unique_number}` : '',
+      Village: (t as any).village || '',
+      Town: (t as any).town || '',
+      'Return Rate': (t as any).percentage_of_return ? `${(t as any).percentage_of_return}%` : '',
+      'Interest Days': t.interest_days || '',
+      Amount: t.amount,
+      Notes: t.notes || ''
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(sheetData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Returns');
+    const fileLabel = `${selectedMonth.getFullYear()}-${String(selectedMonth.getMonth() + 1).padStart(2, '0')}`;
+    XLSX.writeFile(workbook, `returns-${fileLabel}.xlsx`);
   };
 
 
@@ -208,54 +220,46 @@ export default function MasterSheet() {
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="card" style={{ marginBottom: '24px' }}>
-          <h3 style={{ marginBottom: '20px', fontSize: '20px', fontWeight: 700 }}>🔍 Filters</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '16px' }}>
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label>Start Date</label>
-              <input
-                type="date"
-                value={dateFilter.start_date}
-                onChange={(e) => setDateFilter({ ...dateFilter, start_date: e.target.value })}
-                style={{ fontSize: '16px', padding: '12px' }}
-              />
+        {/* Month & Controls */}
+        <div className="card" style={{ marginBottom: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>Viewing Month</p>
+              <h3 style={{ margin: '4px 0 0 0', fontSize: '22px', fontWeight: 800, color: '#1e293b' }}>
+                {selectedMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
+              </h3>
             </div>
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label>End Date</label>
-              <input
-                type="date"
-                value={dateFilter.end_date}
-                onChange={(e) => setDateFilter({ ...dateFilter, end_date: e.target.value })}
-                style={{ fontSize: '16px', padding: '12px' }}
-              />
-            </div>
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label>Filter by Member</label>
-              <select
-                value={selectedMember}
-                onChange={(e) => setSelectedMember(e.target.value)}
-                style={{ fontSize: '16px', padding: '12px' }}
-              >
-                <option value="">All Members</option>
-                {members.map(member => (
-                  <option key={member.id} value={member.id}>
-                    {member.name} {member.unique_number && `(#${member.unique_number})`}
-                  </option>
-                ))}
-              </select>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <button onClick={() => goToMonth(-1)} className="btn btn-secondary">← Previous</button>
+              <button onClick={() => goToMonth(1)} className="btn btn-secondary">Next →</button>
+              <button onClick={handleDownloadExcel} className="btn btn-primary">
+                ⬇ Download Excel
+              </button>
             </div>
           </div>
-          {(dateFilter.start_date || dateFilter.end_date || selectedMember) && (
-            <button
-              onClick={() => {
-                setDateFilter({ start_date: '', end_date: '' });
-                setSelectedMember('');
-              }}
-              className="btn btn-secondary"
-              style={{ fontSize: '14px', padding: '8px 16px' }}
+
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label>Filter by Member</label>
+            <select
+              value={selectedMember}
+              onChange={(e) => setSelectedMember(e.target.value)}
+              style={{ fontSize: '16px', padding: '12px' }}
             >
-              Clear Filters
+              <option value="">All Members</option>
+              {members.map(member => (
+                <option key={member.id} value={member.id}>
+                  {member.name} {member.unique_number && `(#${member.unique_number})`}
+                </option>
+              ))}
+            </select>
+          </div>
+          {selectedMember && (
+            <button
+              onClick={() => setSelectedMember('')}
+              className="btn btn-secondary"
+              style={{ fontSize: '14px', padding: '8px 16px', alignSelf: 'flex-start' }}
+            >
+              Clear Member Filter
             </button>
           )}
         </div>
