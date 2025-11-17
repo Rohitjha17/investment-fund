@@ -1,0 +1,18 @@
+{
+  "members": [],
+  "deposits": [],
+  "withdrawals": [],
+  "returns": [],
+  "admins": [
+    {
+      "id": 1,
+      "username": "admin",
+      "password": "$2a$10$aI5msF2PalxvVq1gTbnbq.EJ3hwEpv3NXy4wfO0BOXCWHHPihBSGy",
+      "role": "super_admin",
+      "created_at": "2025-11-14T05:38:22.921Z"
+    }
+  ],
+  "calculated_months": [
+    "2025-10"
+  ]
+}

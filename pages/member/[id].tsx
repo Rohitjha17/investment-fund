@@ -24,6 +24,7 @@ export default function MemberDetail() {
   const { id } = router.query;
   const [member, setMember] = useState<Member | null>(null);
   const [loading, setLoading] = useState(true);
+  const [memberError, setMemberError] = useState<string | null>(null);
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
   const [transactionForm, setTransactionForm] = useState({
@@ -69,11 +70,28 @@ export default function MemberDetail() {
 
   const fetchMember = async () => {
     try {
+      setMemberError(null);
       const res = await fetch(`/api/members/${id}`);
       const data = await res.json();
-      setMember(data);
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to fetch member');
+      }
+
+      setMember({
+        ...data,
+        deposits: Array.isArray(data.deposits) ? data.deposits : [],
+        withdrawals: Array.isArray(data.withdrawals) ? data.withdrawals : [],
+        returns: Array.isArray(data.returns) ? data.returns : []
+      });
     } catch (error) {
       console.error('Error fetching member:', error);
+      setMemberError(
+        error instanceof Error
+          ? error.message
+          : 'Unable to load this member right now.'
+      );
+      setMember(null);
     } finally {
       setLoading(false);
     }
@@ -137,7 +155,7 @@ export default function MemberDetail() {
     });
   };
 
-  if (loading || !member) {
+  if (loading) {
     return (
       <div className="container" style={{ 
         display: 'flex', 
@@ -156,6 +174,36 @@ export default function MemberDetail() {
           animation: 'spin 0.8s linear infinite'
         }} />
         <p style={{ color: '#64748b', fontSize: '16px', fontWeight: 500 }}>Loading member details...</p>
+      </div>
+    );
+  }
+
+  if (!member) {
+    return (
+      <div className="container" style={{
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: '60vh',
+        textAlign: 'center',
+        gap: '16px'
+      }}>
+        <div style={{
+          fontSize: '48px'
+        }}>⚠️</div>
+        <h1 style={{ fontSize: '24px', fontWeight: 700, margin: 0 }}>Unable to load member</h1>
+        <p style={{ color: '#64748b', maxWidth: '480px' }}>
+          {memberError || 'An unexpected error occurred while loading this member. Please try again later.'}
+        </p>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <button onClick={fetchMember} className="btn btn-primary">
+            🔄 Retry
+          </button>
+          <button onClick={() => router.push('/dashboard')} className="btn btn-secondary">
+            ← Back to Dashboard
+          </button>
+        </div>
       </div>
     );
   }
