@@ -2,7 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import db from '@/lib/db-firebase';
 import { calculateComplexInterest, getNextMonthWindow } from '@/lib/utils';
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -14,7 +14,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       return res.status(400).json({ error: 'Member ID is required' });
     }
 
-    const referrer = db.getMember(parseInt(member_id));
+    const referrer = await db.getMember(parseInt(member_id));
     if (!referrer) {
       return res.status(404).json({ error: 'Member not found' });
     }
@@ -25,7 +25,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     const endDate = window.end;
 
     // Find all members referred by this person
-    const allMembers = db.getMembers();
+    const allMembers = await db.getMembers();
     const referredMembers = allMembers.filter((m: any) => 
       m.referral_name && 
       (m.referral_name.toLowerCase() === referrer.name.toLowerCase() ||
@@ -36,9 +36,9 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     const referralBreakdown: any[] = [];
 
     // Calculate referral income for each referred member (next month cycle)
-    referredMembers.forEach((referred: any) => {
-      const fullReferred = db.getMember(referred.id);
-      if (!fullReferred) return;
+    for (const referred of referredMembers) {
+      const fullReferred = await db.getMember(referred.id);
+      if (!fullReferred) continue;
 
       const deposits = (fullReferred.deposits || []).map((d: any) => ({
         amount: d.amount,
@@ -74,7 +74,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         referral_percent: referralPercent,
         referral_income: referralIncome
       });
-    });
+    }
 
     return res.status(200).json({
       referrer_id: parseInt(member_id),

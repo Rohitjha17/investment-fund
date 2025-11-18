@@ -2,7 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import db from '@/lib/db-firebase';
 import { calculateComplexInterest, getCurrentMonthWindow } from '@/lib/utils';
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -14,7 +14,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       return res.status(400).json({ error: 'Member ID is required' });
     }
 
-    const member = db.getMember(parseInt(member_id));
+    const member = await db.getMember(parseInt(member_id));
     if (!member) {
       return res.status(404).json({ error: 'Member not found' });
     }
