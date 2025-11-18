@@ -14,6 +14,7 @@ export default function Login() {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [emailVerificationSent, setEmailVerificationSent] = useState(false);
   const [emailNotVerified, setEmailNotVerified] = useState(false);
+  const [loginLinkMessage, setLoginLinkMessage] = useState('');
 
   // No auto-login check - user must login every time website opens
 
@@ -23,6 +24,7 @@ export default function Login() {
     setLoading(true);
     setEmailNotVerified(false);
     setEmailVerificationSent(false);
+    setLoginLinkMessage('');
 
     try {
       const res = await fetch('/api/auth/login', {
@@ -33,7 +35,9 @@ export default function Login() {
 
       const data = await res.json();
 
-      if (res.ok && data.authenticated) {
+      if (res.ok && data.linkSent) {
+        setLoginLinkMessage(data.message || 'Secure login link sent. Please check your inbox to finish signing in.');
+      } else if (res.ok && data.authenticated) {
         router.push('/dashboard');
       } else {
         if (data.emailVerified === false) {
@@ -418,6 +422,21 @@ export default function Login() {
           {/* Login Form */}
           {step === 'login' && !showForgotPassword && (
             <form onSubmit={handleLogin} style={{ marginTop: '32px' }}>
+              {loginLinkMessage && (
+                <div className="alert" style={{ 
+                  background: '#ecfdf5',
+                  color: '#065f46',
+                  marginBottom: '16px',
+                  margin: '0 20px 16px 20px',
+                  borderRadius: '8px',
+                  padding: '12px',
+                  border: '1px solid #6ee7b7',
+                  fontSize: '14px',
+                  fontWeight: 600
+                }}>
+                  {loginLinkMessage}
+                </div>
+              )}
               {error && (
                 <div className="alert alert-error" style={{ animation: 'slideIn 0.3s ease', marginBottom: '16px', margin: '0 20px 16px 20px' }}>
                   {error}
