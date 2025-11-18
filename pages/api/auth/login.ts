@@ -62,10 +62,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       // Send email sign-in link and sign the user out immediately
+      const protocol =
+        (req.headers['x-forwarded-proto'] as string)?.split(',')[0]?.trim() ||
+        (req.headers.referer?.startsWith('https') ? 'https' : 'http');
+      const host = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3000';
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`;
+
       const actionCodeSettings = {
-        url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/verify-login?email=${encodeURIComponent(
-          email
-        )}`,
+        url: `${baseUrl}/verify-login?email=${encodeURIComponent(email)}`,
         handleCodeInApp: true
       };
 
