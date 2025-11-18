@@ -1,5 +1,29 @@
-import { db, Timestamp } from './firebase';
-import { collection, doc, setDoc, getDoc, getDocs } from 'firebase/firestore';
+import { adminDb } from './firebase-admin';
+import type {
+  Firestore,
+  CollectionReference,
+  DocumentReference,
+} from 'firebase-admin/firestore';
+import { Timestamp } from 'firebase-admin/firestore';
+
+const db: Firestore = adminDb as unknown as Firestore;
+
+const collection = (dbInstance: Firestore, path: string): CollectionReference =>
+  dbInstance.collection(path);
+
+const doc = (dbInstance: Firestore, path: string, id: string): DocumentReference =>
+  dbInstance.collection(path).doc(id);
+
+const getDoc = (docRef: DocumentReference) => docRef.get();
+const setDoc = (
+  docRef: DocumentReference,
+  data: FirebaseFirestore.DocumentData,
+  options?: FirebaseFirestore.SetOptions
+) => (options ? docRef.set(data, options) : docRef.set(data));
+
+const getDocs = (
+  collectionRef: CollectionReference
+): Promise<FirebaseFirestore.QuerySnapshot> => collectionRef.get();
 
 /**
  * Firestore Collection Structure and Initialization
@@ -106,7 +130,7 @@ export async function initializeFirestore(): Promise<boolean> {
     try {
       const systemDoc = await getDoc(systemDocRef);
 
-      if (!systemDoc.exists()) {
+      if (!systemDoc.exists) {
         // Initialize system config
         await setDoc(systemDocRef, {
           last_member_id: 0,
@@ -166,7 +190,7 @@ export async function getNextId(collectionName: 'members' | 'deposits' | 'withdr
     const systemDocRef = doc(db, COLLECTIONS.system, 'config');
     const systemDoc = await getDoc(systemDocRef);
     
-    if (!systemDoc.exists()) {
+    if (!systemDoc.exists) {
       // Initialize if doesn't exist
       await initializeFirestore();
       return 1;
