@@ -74,6 +74,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             };
           }
           
+          // Type assertion for member with all properties
+          const memberData = member as any;
+          
           // Get current deposits (always fetch latest)
           const memberDeposits = member.deposits || [];
           
@@ -84,7 +87,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             deposit_date: d.deposit_date || '',
             percentage: d.percentage !== null && d.percentage !== undefined 
               ? parseFloat(d.percentage) 
-              : (member?.percentage_of_return || 0),
+              : (memberData?.percentage_of_return || 0),
             notes: d.notes || null
           })) : [];
           
@@ -94,12 +97,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             type: 'return',
             transaction_type: 'return',
             member_id: memberId,
-            member_name: member.name || r.member_name || '',
-            alias_name: member.alias_name || null,
-            unique_number: member.unique_number || null,
-            village: member.village || null,
-            town: member.town || null,
-            percentage_of_return: member.percentage_of_return || null,
+            member_name: memberData.name || r.member_name || '',
+            alias_name: memberData.alias_name || null,
+            unique_number: memberData.unique_number || null,
+            village: memberData.village || null,
+            town: memberData.town || null,
+            percentage_of_return: memberData.percentage_of_return || null,
             deposits: depositsData,
             amount: r.return_amount,
             date: r.return_date,

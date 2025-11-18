@@ -42,8 +42,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Calculate returns for each member
     for (const memberData of allMembers) {
-      const member = await db.getMember(memberData.id);
+      const member = await db.getMember(parseInt(memberData.id.toString()));
       if (!member) continue;
+
+      // Type assertion for member with all properties
+      const memberWithData = member as any;
 
       const deposits = member.deposits || [];
       const withdrawals = member.withdrawals || [];
@@ -58,13 +61,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           date: d.deposit_date,
           percentage: d.percentage !== null && d.percentage !== undefined
             ? d.percentage
-            : member.percentage_of_return
+            : memberWithData.percentage_of_return
         })),
         withdrawals.map((w: any) => ({
           amount: w.amount,
           date: w.withdrawal_date
         })),
-        member.percentage_of_return,
+        memberWithData.percentage_of_return,
         start,
         end
       );

@@ -19,6 +19,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(404).json({ error: 'Member not found' });
     }
 
+    // Type assertion for referrer with all properties
+    const referrerData = referrer as any;
+
     // Use provided dates OR default to current month (1-30)
     let startDate: Date;
     let endDate: Date;
@@ -37,8 +40,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const allMembers = await db.getMembers();
     const referredMembers = allMembers.filter((m: any) => 
       m.referral_name && 
-      (m.referral_name.toLowerCase() === referrer.name.toLowerCase() ||
-       m.referral_name.toLowerCase() === `${referrer.name} #${referrer.unique_number || referrer.id}`.toLowerCase())
+      (m.referral_name.toLowerCase() === referrerData.name.toLowerCase() ||
+       m.referral_name.toLowerCase() === `${referrerData.name} #${referrerData.unique_number || referrerData.id}`.toLowerCase())
     );
 
     let totalReferralIncome = 0;
@@ -46,7 +49,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     for (const basicReferred of referredMembers) {
       // Load full member with deposits and withdrawals
-      const referred = await db.getMember(basicReferred.id) as any;
+      const referred = await db.getMember(parseInt(basicReferred.id.toString())) as any;
       if (!referred) continue;
 
       const deposits = (referred.deposits || []).map((d: any) => ({
@@ -88,7 +91,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(200).json({
       referrer_id: parseInt(member_id),
-      referrer_name: referrer.name,
+      referrer_name: referrerData.name,
       total_referral_income: Math.round(totalReferralIncome * 100) / 100,
       referred_count: referredMembers.length,
       breakdown: referralBreakdown,

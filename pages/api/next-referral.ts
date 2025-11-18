@@ -19,6 +19,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(404).json({ error: 'Member not found' });
     }
 
+    // Type assertion for referrer with all properties
+    const referrerData = referrer as any;
+
     // Use next month window (1-30)
     const window = getNextMonthWindow();
     const startDate = window.start;
@@ -28,8 +31,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const allMembers = await db.getMembers();
     const referredMembers = allMembers.filter((m: any) => 
       m.referral_name && 
-      (m.referral_name.toLowerCase() === referrer.name.toLowerCase() ||
-       m.referral_name.toLowerCase() === `${referrer.name} #${referrer.unique_number || referrer.id}`.toLowerCase())
+      (m.referral_name.toLowerCase() === referrerData.name.toLowerCase() ||
+       m.referral_name.toLowerCase() === `${referrerData.name} #${referrerData.unique_number || referrerData.id}`.toLowerCase())
     );
 
     let totalReferralIncome = 0;
@@ -37,15 +40,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Calculate referral income for each referred member (next month cycle)
     for (const referred of referredMembers) {
-      const fullReferred = await db.getMember(referred.id);
+      const fullReferred = await db.getMember(parseInt(referred.id.toString()));
       if (!fullReferred) continue;
+
+      // Type assertion for fullReferred with all properties
+      const referredData = fullReferred as any;
 
       const deposits = (fullReferred.deposits || []).map((d: any) => ({
         amount: d.amount,
         date: d.deposit_date,
         percentage: d.percentage !== null && d.percentage !== undefined 
           ? d.percentage 
-          : fullReferred.percentage_of_return
+          : referredData.percentage_of_return
       }));
       
       const withdrawals = (fullReferred.withdrawals || []).map((w: any) => ({
@@ -57,19 +63,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const interestEarned = calculateComplexInterest(
         deposits,
         withdrawals,
-        fullReferred.percentage_of_return,
+        referredData.percentage_of_return,
         startDate,
         endDate
       );
 
-      const referralPercent = fullReferred.referral_percent || 0;
+      const referralPercent = referredData.referral_percent || 0;
       const referralIncome = (interestEarned * referralPercent) / 100;
 
       totalReferralIncome += referralIncome;
 
       referralBreakdown.push({
         member_id: fullReferred.id,
-        member_name: fullReferred.name,
+        member_name: referredData.name,
         interest_earned: interestEarned,
         referral_percent: referralPercent,
         referral_income: referralIncome
@@ -78,7 +84,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(200).json({
       referrer_id: parseInt(member_id),
-      referrer_name: referrer.name,
+      referrer_name: referrerData.name,
       next_referral_amount: Math.round(totalReferralIncome * 100) / 100,
       referred_count: referredMembers.length,
       breakdown: referralBreakdown,

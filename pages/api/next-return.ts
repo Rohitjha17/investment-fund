@@ -19,6 +19,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(404).json({ error: 'Member not found' });
     }
 
+    // Type assertion for member with all properties
+    const memberData = member as any;
+
     // Use next month window (1-30)
     const window = getNextMonthWindow();
     const startDate = window.start;
@@ -35,13 +38,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         date: d.deposit_date,
         percentage: d.percentage !== null && d.percentage !== undefined 
           ? d.percentage 
-          : member.percentage_of_return
+          : memberData.percentage_of_return
       })),
       withdrawals.map((w: any) => ({
         amount: w.amount,
         date: w.withdrawal_date
       })),
-      member.percentage_of_return,
+      memberData.percentage_of_return,
       startDate,
       endDate
     );
@@ -53,7 +56,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       member_id: parseInt(member_id),
       next_return_amount: interest,
       principal: currentBalance,
-      percentage: member.percentage_of_return,
+      percentage: memberData.percentage_of_return,
       period: 'Next Month (1-30)',
       start_date: startDate.toISOString(),
       end_date: endDate.toISOString()
