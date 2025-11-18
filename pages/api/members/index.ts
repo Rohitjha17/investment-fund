@@ -6,10 +6,23 @@ import { initializeFirestore } from '@/lib/firestore-init';
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Initialize Firestore server-side before operations
   try {
-    await initializeFirestore();
-  } catch (error) {
-    console.error('Warning: Firestore initialization failed:', error);
-    // Continue anyway - might already be initialized
+    const initialized = await initializeFirestore();
+    if (!initialized) {
+      console.error('⚠️ [API] Firestore initialization returned false');
+    }
+  } catch (error: any) {
+    console.error('❌ [API] Firestore initialization failed:', {
+      message: error?.message,
+      code: error?.code,
+      name: error?.name
+    });
+    // Return error immediately if initialization fails
+    return res.status(500).json({
+      error: 'Firestore initialization failed',
+      details: error?.message || 'Unknown error',
+      code: error?.code || 'INIT_ERROR',
+      hint: 'Check Firebase configuration and security rules'
+    });
   }
 
   if (req.method === 'GET') {

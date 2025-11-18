@@ -95,24 +95,39 @@ export interface SystemDocument {
  */
 export async function initializeFirestore(): Promise<boolean> {
   try {
-    console.log('Initializing Firestore database...');
+    const isServer = typeof window === 'undefined';
+    if (isServer) {
+      console.log('🔧 [Server] Initializing Firestore database...');
+    }
 
     // Check if system document exists
     const systemDocRef = doc(db, COLLECTIONS.system, 'config');
-    const systemDoc = await getDoc(systemDocRef);
+    
+    try {
+      const systemDoc = await getDoc(systemDocRef);
 
-    if (!systemDoc.exists()) {
-      // Initialize system config
-      await setDoc(systemDocRef, {
-        last_member_id: 0,
-        last_deposit_id: 0,
-        last_withdrawal_id: 0,
-        last_return_id: 0,
-        version: '1.0.0',
-        initialized_at: Timestamp.now(),
-        updated_at: Timestamp.now()
-      });
-      console.log('✅ System config initialized');
+      if (!systemDoc.exists()) {
+        // Initialize system config
+        await setDoc(systemDocRef, {
+          last_member_id: 0,
+          last_deposit_id: 0,
+          last_withdrawal_id: 0,
+          last_return_id: 0,
+          version: '1.0.0',
+          initialized_at: Timestamp.now(),
+          updated_at: Timestamp.now()
+        });
+        if (isServer) {
+          console.log('✅ [Server] System config initialized');
+        }
+      }
+    } catch (docError: any) {
+      // Handle permission errors gracefully
+      if (docError?.code === 'permission-denied') {
+        console.error('❌ [Server] Firestore permission denied - Check security rules!');
+        throw new Error('Firestore permission denied. Please check security rules in Firebase Console.');
+      }
+      throw docError;
     }
 
     // Initialize calculated_months collection (empty, documents added as needed)
@@ -121,10 +136,24 @@ export async function initializeFirestore(): Promise<boolean> {
     // Collections are created automatically when first document is added
     // No need to create empty collections
     
-    console.log('✅ Firestore initialization complete');
+    if (isServer) {
+      console.log('✅ [Server] Firestore initialization complete');
+    }
     return true;
-  } catch (error) {
-    console.error('❌ Error initializing Firestore:', error);
+  } catch (error: any) {
+    const isServer = typeof window === 'undefined';
+    const errorMsg = error?.message || 'Unknown error';
+    const errorCode = error?.code || 'UNKNOWN';
+    
+    if (isServer) {
+      console.error('❌ [Server] Error initializing Firestore:', {
+        message: errorMsg,
+        code: errorCode,
+        stack: error?.stack?.substring(0, 200)
+      });
+    } else {
+      console.error('❌ [Client] Error initializing Firestore:', errorMsg);
+    }
     return false;
   }
 }
