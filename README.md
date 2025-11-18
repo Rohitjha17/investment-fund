@@ -9,7 +9,7 @@ Investment firm management system built with Next.js, TypeScript, and Firebase.
 - **Interest Calculation** - Automatic 30-day cycle interest calculation
 - **Referral Income** - Calculate referral commissions
 - **Master Sheet** - View all returns with Excel export
-- **Email Link Authentication** - Secure login via email link (password + email verification)
+- **Email Authentication** - Secure login with email verification
 - **Cloud Storage** - All data stored in Firebase Firestore
 - **Real-time Sync** - Changes sync across all devices
 
@@ -55,9 +55,7 @@ NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=123456789
 NEXT_PUBLIC_FIREBASE_APP_ID=1:123456789:web:abc123
 NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=G-XXXXXXXXXX
-
-# IMPORTANT: Set your production URL for email link authentication
-NEXT_PUBLIC_APP_URL=https://your-domain.vercel.app
+NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
 ### 4. Initialize Firestore
@@ -92,23 +90,14 @@ service cloud.firestore {
 
 ## 📚 Usage
 
-### First Time Setup
+### First Time Login
 
-**Registration:**
 1. Open `http://localhost:3000`
 2. Click **"Create Account"**
 3. Enter email and password (min 6 characters)
 4. Check your email for verification link
 5. Click verification link to verify email
-
-**Login (Email Link Authentication):**
-1. Enter your email and password
-2. Click **"Login"**
-3. Check your email for login verification link
-4. Click the link to complete login
-5. You'll be redirected to dashboard
-
-> **Note**: Login requires BOTH password verification AND email link confirmation for enhanced security.
+6. Login with email and password
 
 ### Features
 

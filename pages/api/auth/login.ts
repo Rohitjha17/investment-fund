@@ -1,6 +1,11 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { auth } from '@/lib/firebase';
-import { signInWithEmailAndPassword, sendSignInLinkToEmail, signOut } from 'firebase/auth';
+import {
+  signInWithEmailAndPassword,
+  sendEmailVerification,
+  sendSignInLinkToEmail,
+  signOut
+} from 'firebase/auth';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -19,41 +24,64 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
-      // Sign in user to verify credentials
+      // Sign in user
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // Check if email is verified (existing check remains)
+      // Check if email is verified
       if (!user.emailVerified) {
+        // Reload user to get latest verification status
         await user.reload();
+
+        // If still not verified, send verification email again
         if (!user.emailVerified) {
+          try {
+            await sendEmailVerification(user, {
+              url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/login`,
+              handleCodeInApp: false,
+            });
+          } catch (verifyError) {
+            console.error('Error sending verification email:', verifyError);
+          }
+
           return res.status(403).json({
-            error: 'Please verify your email address first.',
+            error: 'Please verify your email address before logging in.',
             emailVerified: false,
-            message: 'Please verify your email before logging in.',
+            message: 'A verification email has been sent. Please check your inbox and click the verification link.',
             resendEmail: true
           });
         }
       }
 
-      // ✅ NEW: Send sign-in link to email
+      // After successful password auth, send secure sign-in link
+      const productionUrl =
+        process.env.NEXT_PUBLIC_PRODUCTION_APP_URL || process.env.NEXT_PUBLIC_APP_URL;
+
+      if (!productionUrl || productionUrl.includes('localhost')) {
+        await signOut(auth).catch(() => undefined);
+        return res.status(500).json({
+          error: 'Production application URL is not configured. Set NEXT_PUBLIC_PRODUCTION_APP_URL.'
+        });
+      }
+
+      const normalizedUrl = productionUrl.endsWith('/')
+        ? productionUrl.slice(0, -1)
+        : productionUrl;
+
       const actionCodeSettings = {
-        url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://your-production-domain.vercel.app'}/verify-login`,
-        handleCodeInApp: true,
+        url: `${normalizedUrl}/verify-link?email=${encodeURIComponent(email)}`,
+        handleCodeInApp: true
       };
 
       await sendSignInLinkToEmail(auth, email, actionCodeSettings);
 
-      // ✅ NEW: Sign out immediately after sending link
-      await signOut(auth);
+      // Sign out immediately to ensure login completes only after link click
+      await signOut(auth).catch(() => undefined);
 
-      // ✅ NEW: Return response indicating email link was sent
       return res.status(200).json({
         success: true,
-        authenticated: false,
         emailLinkSent: true,
-        message: 'Login link sent to your email. Please check your inbox and click the link to complete login.',
-        email: email
+        message: 'Secure login link sent. Please check your email to complete sign in.'
       });
     } catch (error: any) {
       if (error.code === 'auth/user-not-found') {

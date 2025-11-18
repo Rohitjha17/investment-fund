@@ -10,6 +10,7 @@ export default function Login() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [step, setStep] = useState<'login' | 'register' | 'forgot-password'>('login');
   const [error, setError] = useState('');
+  const [linkSentMessage, setLinkSentMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [emailVerificationSent, setEmailVerificationSent] = useState(false);
@@ -20,6 +21,8 @@ export default function Login() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setLinkSentMessage('');
+    setLinkSentMessage('');
     setLoading(true);
     setEmailNotVerified(false);
     setEmailVerificationSent(false);
@@ -33,19 +36,14 @@ export default function Login() {
 
       const data = await res.json();
 
-      // ✅ NEW: Handle email link sent response
       if (res.ok && data.emailLinkSent) {
-        // Store email in localStorage for verification page
-        window.localStorage.setItem('emailForSignIn', email);
-        
-        alert(data.message || 'Login link sent to your email. Please check your inbox and click the link to complete login.');
+        setLinkSentMessage(
+          data.message || 'Secure login link sent. Please check your email to finish signing in.'
+        );
         setEmail('');
         setPassword('');
-        return;
-      }
-
-      if (res.ok && data.authenticated) {
-        router.push('/dashboard');
+        setStep('login');
+        setShowForgotPassword(false);
       } else {
         if (data.emailVerified === false) {
           setEmailNotVerified(true);
@@ -434,6 +432,23 @@ export default function Login() {
                   {error}
                 </div>
               )}
+              {linkSentMessage && (
+                <div
+                  className="alert"
+                  style={{
+                    background: '#dcfce7',
+                    color: '#15803d',
+                    margin: '0 20px 16px 20px',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    border: '1px solid #86efac',
+                    animation: 'slideIn 0.3s ease'
+                  }}
+                >
+                  {linkSentMessage}
+                </div>
+              )}
               
               <div className="form-group" style={{ margin: '0 20px' }}>
                 <label>Email Address *</label>
@@ -479,11 +494,12 @@ export default function Login() {
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', margin: '16px 20px 0 20px', flexWrap: 'wrap', gap: '8px' }}>
-                <button
+        <button
                   type="button"
                   onClick={() => {
                     setShowForgotPassword(true);
                     setError('');
+            setLinkSentMessage('');
                   }}
                   style={{
                     background: 'none',
@@ -496,12 +512,13 @@ export default function Login() {
                 >
                   Forgot Password?
                 </button>
-                <button
+        <button
                   type="button"
                   onClick={() => {
                     setStep('register');
                     setError('');
                     setEmailVerificationSent(false);
+            setLinkSentMessage('');
                   }}
                   style={{
                     background: 'none',
