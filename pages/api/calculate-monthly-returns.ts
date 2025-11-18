@@ -45,9 +45,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const member = await db.getMember(parseInt(memberData.id.toString()));
       if (!member) continue;
 
-      // Type assertion for member with all properties
-      const memberWithData = member as any;
-
       const deposits = member.deposits || [];
       const withdrawals = member.withdrawals || [];
 
@@ -55,19 +52,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (deposits.length === 0) continue;
 
       // Calculate interest for previous month (1-30 day window)
+      const defaultPercentage = (member as any).percentage_of_return || 0;
+      
       const interest = calculateComplexInterest(
         deposits.map((d: any) => ({
           amount: d.amount,
           date: d.deposit_date,
           percentage: d.percentage !== null && d.percentage !== undefined
             ? d.percentage
-            : memberWithData.percentage_of_return
+            : defaultPercentage
         })),
         withdrawals.map((w: any) => ({
           amount: w.amount,
           date: w.withdrawal_date
         })),
-        memberWithData.percentage_of_return,
+        defaultPercentage,
         start,
         end
       );

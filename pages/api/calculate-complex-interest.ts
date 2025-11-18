@@ -19,9 +19,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(404).json({ error: 'Member not found' });
     }
 
-    // Type assertion for member with all properties
-    const memberData = member as any;
-
     // Get all deposits and withdrawals for this member
     const deposits = member.deposits || [];
     const withdrawals = member.withdrawals || [];
@@ -41,19 +38,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Calculate complex interest with clamped window
+    const defaultPercentage = (member as any).percentage_of_return || 0;
+    
     const interest = calculateComplexInterest(
       deposits.map((d: any) => ({
         amount: d.amount,
         date: d.deposit_date,
         percentage: d.percentage !== null && d.percentage !== undefined 
           ? d.percentage 
-          : memberData.percentage_of_return
+          : defaultPercentage
       })),
       withdrawals.map((w: any) => ({
         amount: w.amount,
         date: w.withdrawal_date
       })),
-      memberData.percentage_of_return,
+      defaultPercentage,
       startDate,
       endDate
     );
@@ -65,7 +64,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       member_id: parseInt(member_id),
       interest: interest,
       principal: currentBalance,
-      percentage: memberData.percentage_of_return,
+      percentage: defaultPercentage,
       calculation_period: '30 days',
       start_date: startDate.toISOString(),
       end_date: endDate.toISOString()

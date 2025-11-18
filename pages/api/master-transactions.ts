@@ -43,19 +43,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         })),
         ...(await Promise.all(returns.map(async (r: any) => {
           // Always fetch latest member details to ensure data is up-to-date
-          // Normalize member_id to number
-          let memberId: number;
-          if (typeof r.member_id === 'number') {
-            memberId = r.member_id;
-          } else if (typeof r.member_id === 'string') {
-            const parsed = parseInt(r.member_id);
-            memberId = isNaN(parsed) ? 0 : parsed;
-          } else {
-            memberId = parseInt(String(r.member_id)) || 0;
-          }
+          const memberId = parseInt(r.member_id) || r.member_id;
+          let member = await db.getMember(parseInt(memberId));
           
-          let member = null;
-          if (memberId > 0) {
+          // If member not found with parsed ID, try with original ID
+          if (!member && memberId !== parseInt(memberId)) {
             member = await db.getMember(memberId);
           }
           
@@ -82,20 +74,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             };
           }
           
-          // Type assertion for member with all properties
-          const memberData = member as any;
-          
           // Get current deposits (always fetch latest)
           const memberDeposits = member.deposits || [];
           
           // Ensure we have valid deposits data with all details
+          const memberPercentage = (member as any)?.percentage_of_return || 0;
           const depositsData = memberDeposits.length > 0 ? memberDeposits.map((d: any) => ({
             id: parseInt(d.id) || d.id,
             amount: parseFloat(d.amount) || 0,
             deposit_date: d.deposit_date || '',
             percentage: d.percentage !== null && d.percentage !== undefined 
               ? parseFloat(d.percentage) 
-              : (memberData?.percentage_of_return || 0),
+              : memberPercentage,
             notes: d.notes || null
           })) : [];
           
@@ -105,12 +95,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             type: 'return',
             transaction_type: 'return',
             member_id: memberId,
-            member_name: memberData.name || r.member_name || '',
-            alias_name: memberData.alias_name || null,
-            unique_number: memberData.unique_number || null,
-            village: memberData.village || null,
-            town: memberData.town || null,
-            percentage_of_return: memberData.percentage_of_return || null,
+            member_name: (member as any).name || r.member_name || '',
+            alias_name: (member as any).alias_name || null,
+            unique_number: (member as any).unique_number || null,
+            village: (member as any).village || null,
+            town: (member as any).town || null,
+            percentage_of_return: (member as any).percentage_of_return || null,
             deposits: depositsData,
             amount: r.return_amount,
             date: r.return_date,
@@ -126,39 +116,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Filter by member_id if provided
       let filteredTransactions = allTransactions;
       if (member_id) {
-        const filterMemberId = typeof member_id === 'string' ? parseInt(member_id) : member_id;
-        filteredTransactions = filteredTransactions.filter((t: any) => {
-          const tMemberId = typeof t.member_id === 'number' ? t.member_id : parseInt(String(t.member_id)) || 0;
-          return tMemberId === filterMemberId;
-        });
+        filteredTransactions = filteredTransactions.filter(t => t.member_id === parseInt(member_id as string));
       }
 
       // Filter by date range if provided
       if (start_date && end_date) {
-        try {
-          const start = new Date(start_date as string);
-          const end = new Date(end_date as string);
-          // Set end date to end of day
-          end.setHours(23, 59, 59, 999);
-          
-          if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
-            filteredTransactions = filteredTransactions.filter((t: any) => {
-              if (!t.date) return false;
-              const transactionDate = new Date(t.date);
-              return !isNaN(transactionDate.getTime()) && transactionDate >= start && transactionDate <= end;
-            });
-          }
-        } catch (error) {
-          console.error('Error filtering by date:', error);
-        }
+        const start = new Date(start_date as string);
+        const end = new Date(end_date as string);
+        // Set end date to end of day
+        end.setHours(23, 59, 59, 999);
+        
+        filteredTransactions = filteredTransactions.filter(t => {
+          const transactionDate = new Date(t.date);
+          return transactionDate >= start && transactionDate <= end;
+        });
       }
 
       // Sort by date (newest first)
-      filteredTransactions.sort((a: any, b: any) => {
-        const dateA = a.date ? new Date(a.date).getTime() : 0;
-        const dateB = b.date ? new Date(b.date).getTime() : 0;
-        return dateB - dateA;
-      });
+      filteredTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
       return res.status(200).json(filteredTransactions);
     } catch (error) {
