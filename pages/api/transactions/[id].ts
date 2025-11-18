@@ -2,7 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import db from '@/lib/db-firebase';
 import { parseDate } from '@/lib/utils';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default function handler(req: NextApiRequest, res: NextApiResponse) {
   const { id, type } = req.query;
 
   if (!id || typeof id !== 'string' || !type || typeof type !== 'string') {
@@ -16,9 +16,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       let transaction = null;
       if (type === 'deposit') {
-        transaction = await db.getDeposit(transactionId);
+        transaction = db.getDeposit(transactionId);
       } else if (type === 'withdrawal') {
-        transaction = await db.getWithdrawal(transactionId);
+        transaction = db.getWithdrawal(transactionId);
       }
 
       if (!transaction) {
@@ -40,7 +40,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (type === 'deposit') {
         const { member_id, amount, deposit_date, percentage, notes } = req.body;
         const parsedDate = parseDate(deposit_date);
-        success = await db.updateDeposit(transactionId, {
+        success = db.updateDeposit(transactionId, {
           member_id,
           amount,
           deposit_date: parsedDate,
@@ -50,7 +50,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       } else if (type === 'withdrawal') {
         const { member_id, amount, withdrawal_date, notes } = req.body;
         const parsedDate = parseDate(withdrawal_date);
-        success = await db.updateWithdrawal(transactionId, {
+        success = db.updateWithdrawal(transactionId, {
           member_id,
           amount,
           withdrawal_date: parsedDate,
@@ -75,9 +75,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       let success = false;
       
       if (type === 'deposit') {
-        success = await db.deleteDeposit(transactionId);
+        success = db.deleteDeposit(transactionId);
       } else if (type === 'withdrawal') {
-        success = await db.deleteWithdrawal(transactionId);
+        success = db.deleteWithdrawal(transactionId);
       }
 
       if (!success) {

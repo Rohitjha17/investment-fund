@@ -25,9 +25,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const endDate = window.end;
 
     // Get all deposits and withdrawals
-    const deposits = (member as any).deposits || [];
-    const withdrawals = (member as any).withdrawals || [];
-    const percentage_of_return = (member as any).percentage_of_return || 0;
+    const deposits = member.deposits || [];
+    const withdrawals = member.withdrawals || [];
 
     // Calculate interest for next month cycle
     const interest = calculateComplexInterest(
@@ -36,13 +35,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         date: d.deposit_date,
         percentage: d.percentage !== null && d.percentage !== undefined 
           ? d.percentage 
-          : percentage_of_return
+          : member.percentage_of_return
       })),
       withdrawals.map((w: any) => ({
         amount: w.amount,
         date: w.withdrawal_date
       })),
-      percentage_of_return,
+      member.percentage_of_return,
       startDate,
       endDate
     );
@@ -54,7 +53,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       member_id: parseInt(member_id),
       next_return_amount: interest,
       principal: currentBalance,
-      percentage: percentage_of_return,
+      percentage: member.percentage_of_return,
       period: 'Next Month (1-30)',
       start_date: startDate.toISOString(),
       end_date: endDate.toISOString()

@@ -25,9 +25,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(404).json({ error: 'Member not found' });
     }
 
-    const deposits = (member as any).deposits || [];
-    const withdrawals = (member as any).withdrawals || [];
-    const percentage_of_return = (member as any).percentage_of_return || 0;
+    const deposits = member.deposits || [];
+    const withdrawals = member.withdrawals || [];
 
     if (deposits.length === 0) {
       return res.status(200).json({
@@ -80,13 +79,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           date: d.deposit_date,
           percentage: d.percentage !== null && d.percentage !== undefined
             ? d.percentage
-            : percentage_of_return
+            : member.percentage_of_return
         })),
         withdrawals.map((w: any) => ({
           amount: w.amount,
           date: w.withdrawal_date
         })),
-        percentage_of_return,
+        member.percentage_of_return,
         startDate,
         endDate
       );
@@ -97,7 +96,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // No deposits in current month - use full month window (1-30)
       if (isPastSecond) {
         // Already past 2nd - return should be in database
-        const currentMonthReturns = ((member as any).returns || []).filter((r: any) => {
+        const currentMonthReturns = member.returns.filter((r: any) => {
           const returnDate = new Date(r.return_date);
           return returnDate.getMonth() === today.getMonth() && 
                  returnDate.getFullYear() === today.getFullYear();
@@ -117,13 +116,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               date: d.deposit_date,
               percentage: d.percentage !== null && d.percentage !== undefined
                 ? d.percentage
-                : percentage_of_return
+                : member.percentage_of_return
             })),
             withdrawals.map((w: any) => ({
               amount: w.amount,
               date: w.withdrawal_date
             })),
-            percentage_of_return,
+            member.percentage_of_return,
             currentWindow.start,
             currentWindow.end
           );
@@ -139,13 +138,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             date: d.deposit_date,
             percentage: d.percentage !== null && d.percentage !== undefined
               ? d.percentage
-              : percentage_of_return
+              : member.percentage_of_return
           })),
           withdrawals.map((w: any) => ({
             amount: w.amount,
             date: w.withdrawal_date
           })),
-          percentage_of_return,
+          member.percentage_of_return,
           currentWindow.start,
           currentWindow.end
         );
@@ -195,7 +194,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const depositBreakdown = adjustedDeposits.map((d: any) => {
       const depositRate = d.percentage !== null && d.percentage !== undefined
         ? d.percentage
-        : percentage_of_return;
+        : member.percentage_of_return;
       
       // Calculate interest for this specific deposit (without withdrawals, as they're already applied)
       const depositInterest = calculateComplexInterest(
@@ -205,7 +204,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           percentage: depositRate
         }],
         [], // No withdrawals - already applied above
-        percentage_of_return,
+        member.percentage_of_return,
         startDate,
         endDate
       );

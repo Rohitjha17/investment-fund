@@ -84,7 +84,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             deposit_date: d.deposit_date || '',
             percentage: d.percentage !== null && d.percentage !== undefined 
               ? parseFloat(d.percentage) 
-              : ((member as any)?.percentage_of_return || 0),
+              : (member?.percentage_of_return || 0),
             notes: d.notes || null
           })) : [];
           
@@ -94,12 +94,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             type: 'return',
             transaction_type: 'return',
             member_id: memberId,
-            member_name: (member as any).name || r.member_name || '',
-            alias_name: (member as any).alias_name || null,
-            unique_number: (member as any).unique_number || null,
-            village: (member as any).village || null,
-            town: (member as any).town || null,
-            percentage_of_return: (member as any).percentage_of_return || null,
+            member_name: member.name || r.member_name || '',
+            alias_name: member.alias_name || null,
+            unique_number: member.unique_number || null,
+            village: member.village || null,
+            town: member.town || null,
+            percentage_of_return: member.percentage_of_return || null,
             deposits: depositsData,
             amount: r.return_amount,
             date: r.return_date,
