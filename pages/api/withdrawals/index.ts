@@ -1,8 +1,9 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import db from '@/lib/db';
+import db from '@/lib/db-firebase';
 import { parseDate } from '@/lib/utils';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // GET all withdrawals
   if (req.method === 'GET') {
     try {
       const withdrawals = await db.getWithdrawals();
@@ -13,6 +14,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
+  // POST create withdrawal
   if (req.method === 'POST') {
     try {
       const { member_id, amount, withdrawal_date, notes } = req.body;

@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import db from '@/lib/db';
+import db from '@/lib/db-firebase';
 import { calculateComplexInterest, getNextMonthWindow } from '@/lib/utils';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -14,24 +14,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'Member ID is required' });
     }
 
-    const member = await db.getMember(parseInt(member_id, 10));
+    const member = await db.getMember(parseInt(member_id));
     if (!member) {
       return res.status(404).json({ error: 'Member not found' });
     }
 
+    // Use next month window (1-30)
     const window = getNextMonthWindow();
     const startDate = window.start;
     const endDate = window.end;
 
+    // Get all deposits and withdrawals
     const deposits = member.deposits || [];
     const withdrawals = member.withdrawals || [];
 
+    // Calculate interest for next month cycle
     const interest = calculateComplexInterest(
       deposits.map((d: any) => ({
         amount: d.amount,
         date: d.deposit_date,
-        percentage:
-          d.percentage !== null && d.percentage !== undefined ? d.percentage : member.percentage_of_return
+        percentage: d.percentage !== null && d.percentage !== undefined 
+          ? d.percentage 
+          : member.percentage_of_return
       })),
       withdrawals.map((w: any) => ({
         amount: w.amount,
@@ -42,12 +46,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       endDate
     );
 
-    const currentBalance =
-      deposits.reduce((sum: number, d: any) => sum + d.amount, 0) -
-      withdrawals.reduce((sum: number, w: any) => sum + w.amount, 0);
+    const currentBalance = deposits.reduce((sum: number, d: any) => sum + d.amount, 0) - 
+                          withdrawals.reduce((sum: number, w: any) => sum + w.amount, 0);
 
     return res.status(200).json({
-      member_id: parseInt(member_id, 10),
+      member_id: parseInt(member_id),
       next_return_amount: interest,
       principal: currentBalance,
       percentage: member.percentage_of_return,

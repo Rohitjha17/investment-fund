@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import db from '@/lib/db';
+import db from '@/lib/db-firebase';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -16,6 +16,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const query = q.toLowerCase().trim();
     const members = await db.getMembers();
     
+    // Search in name, alias, village, town
     const results = members.filter((member: any) => {
       const nameMatch = member.name?.toLowerCase().includes(query);
       const aliasMatch = member.alias_name?.toLowerCase().includes(query);

@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Image from 'next/image';
-import * as XLSX from 'xlsx';
 import { formatDate } from '@/lib/utils';
+import * as XLSX from 'xlsx';
 
 interface Transaction {
   id: number;
@@ -22,6 +22,12 @@ interface Transaction {
   withdrawal_date?: string;
   return_date?: string;
   interest_days?: number;
+  deposits?: Array<{
+    id: number;
+    amount: number;
+    deposit_date: string;
+    percentage: number;
+  }>;
 }
 
 export default function MasterSheet() {
@@ -29,23 +35,39 @@ export default function MasterSheet() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [members, setMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dateFilter, setDateFilter] = useState({
+    start_date: '',
+    end_date: ''
+  });
   const [selectedMember, setSelectedMember] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
-    now.setDate(1);
-    return now;
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
 
   useEffect(() => {
     checkAuth();
     fetchMembers();
     checkAndCalculateMonthlyReturns();
-    fetchTransactions();
   }, []);
 
   useEffect(() => {
     fetchTransactions();
-  }, [selectedMember, selectedMonth]);
+  }, [selectedMonth, selectedMember]);
+
+  useEffect(() => {
+    // Update date filter based on selected month
+    if (selectedMonth) {
+      const [year, month] = selectedMonth.split('-');
+      const startDate = `${year}-${month}-01`;
+      const endDate = `${year}-${month}-30`;
+      setDateFilter({ start_date: startDate, end_date: endDate });
+    }
+  }, [selectedMonth]);
+
+  useEffect(() => {
+    fetchTransactions();
+  }, [dateFilter.start_date, dateFilter.end_date, selectedMember]);
 
   const checkAuth = async () => {
     const res = await fetch('/api/auth/check');
@@ -74,21 +96,101 @@ export default function MasterSheet() {
 
   const fetchTransactions = async () => {
     try {
-      const monthKey = `${selectedMonth.getFullYear()}-${String(selectedMonth.getMonth() + 1).padStart(2, '0')}`;
-      let url = `/api/master-transactions?month=${monthKey}&`;
+      // Calculate date range from selected month
+      const [year, month] = selectedMonth.split('-');
+      const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+      const endDate = new Date(parseInt(year), parseInt(month) - 1, 30, 23, 59, 59, 999);
+      
+      let url = '/api/master-transactions?';
       if (selectedMember) {
-        url += `member_id=${selectedMember}`;
+        url += `member_id=${selectedMember}&`;
       }
+      // Always use selected month for date filtering
+      url += `start_date=${startDate.toISOString().split('T')[0]}&end_date=${endDate.toISOString().split('T')[0]}`;
       
       const res = await fetch(url);
       const data = await res.json();
       
-      const filteredData = data.filter((t: Transaction) => t.transaction_type === 'return');
+      // Master sheet shows only returns
+      let filteredData = data.filter((t: Transaction) => t.transaction_type === 'return');
+      
+      // If no returns found for this month, check if we're looking at current or future months
+      // and create dynamic returns from all members
+      if (filteredData.length === 0) {
+        const today = new Date();
+        const selectedMonthDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+        
+        // Only show dynamic returns for current or future months
+        if (selectedMonthDate >= new Date(today.getFullYear(), today.getMonth(), 1)) {
+          // Fetch all members and calculate their current returns
+          const membersRes = await fetch('/api/members');
+          const membersData = await membersRes.json();
+          
+          // Filter by selected member if needed
+          const membersToShow = selectedMember 
+            ? membersData.filter((m: any) => m.id === parseInt(selectedMember))
+            : membersData;
+          
+          // Create dynamic return entries
+          filteredData = await Promise.all(membersToShow.map(async (member: any) => {
+            // Get member details with deposits
+            const memberRes = await fetch(`/api/members/${member.id}`);
+            const memberData = await memberRes.json();
+            
+            // Calculate current returns for this member
+            const returnsRes = await fetch('/api/member/current-returns', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ member_id: member.id })
+            });
+            const returnsData = await returnsRes.json();
+            
+            return {
+              id: `dynamic-${member.id}`,
+              type: 'return',
+              transaction_type: 'return',
+              member_id: member.id,
+              member_name: memberData.name,
+              alias_name: memberData.alias_name,
+              unique_number: memberData.unique_number,
+              village: memberData.village,
+              town: memberData.town,
+              percentage_of_return: memberData.percentage_of_return,
+              deposits: memberData.deposits || [],
+              amount: returnsData.current_return || 0,
+              date: endDate.toISOString().split('T')[0], // Use end of month
+              interest_days: returnsData.interest_days || 30,
+              notes: returnsData.period_info || 'Calculated dynamically',
+              is_dynamic: true
+            };
+          }));
+        }
+      }
+      
       setTransactions(filteredData);
     } catch (error) {
       console.error('Error fetching transactions:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCalculateMonthlyReturns = async () => {
+    try {
+      const res = await fetch('/api/calculate-monthly-returns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`Success! ${data.message}\nMembers: ${data.membersCalculated}, Total: ₹${data.totalReturns}`);
+        fetchTransactions();
+      } else {
+        alert(data.error || 'Failed to calculate returns');
+      }
+    } catch (error) {
+      console.error('Error calculating monthly returns:', error);
+      alert('Failed to calculate monthly returns');
     }
   };
 
@@ -102,39 +204,6 @@ export default function MasterSheet() {
     }
   };
 
-  const goToMonth = (offset: number) => {
-    setSelectedMonth((prev) => {
-      const next = new Date(prev);
-      next.setMonth(next.getMonth() + offset);
-      return next;
-    });
-  };
-
-  const handleDownloadExcel = () => {
-    if (transactions.length === 0) {
-      alert('No transactions available for this month.');
-      return;
-    }
-
-    const sheetData = transactions.map((t) => ({
-      'Payment Date': formatDate(t.date),
-      Member: t.member_name,
-      'Unique #': t.unique_number ? `#${t.unique_number}` : '',
-      Village: (t as any).village || '',
-      Town: (t as any).town || '',
-      'Return Rate': (t as any).percentage_of_return ? `${(t as any).percentage_of_return}%` : '',
-      'Interest Days': t.interest_days || '',
-      Amount: t.amount,
-      Notes: t.notes || ''
-    }));
-
-    const worksheet = XLSX.utils.json_to_sheet(sheetData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Returns');
-    const fileLabel = `${selectedMonth.getFullYear()}-${String(selectedMonth.getMonth() + 1).padStart(2, '0')}`;
-    XLSX.writeFile(workbook, `returns-${fileLabel}.xlsx`);
-  };
-
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
@@ -142,6 +211,90 @@ export default function MasterSheet() {
       currency: 'INR',
       maximumFractionDigits: 0
     }).format(amount);
+  };
+
+  const exportToExcel = () => {
+    if (transactions.length === 0) {
+      alert('No data to export');
+      return;
+    }
+
+    // Prepare data for Excel - one row per member, clean and simple
+    const excelData = transactions.map((t, index) => {
+      const deposits = (t as any).deposits || [];
+      const totalDeposits = deposits.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0);
+      
+      // Get payment date - always 2nd of month
+      const transDate = new Date(t.date);
+      const monthYear = transDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+      const paymentDate = `2nd ${monthYear}`;
+      
+      return {
+        'S.No': index + 1,
+        'Payment Date': paymentDate,
+        'Unique #': t.unique_number || '',
+        'Member Name': t.member_name,
+        'Alias Name': t.alias_name || '',
+        'Village': (t as any).village || '',
+        'Town': (t as any).town || '',
+        'Total Deposits (₹)': totalDeposits,
+        'Return Rate (%)': (t as any).percentage_of_return || '',
+        'Return Amount (₹)': Math.abs(t.amount),
+        'Status': (t as any).is_dynamic ? 'Live Calculation' : 'Saved',
+        'Notes': t.notes || ''
+      };
+    });
+
+    // Create workbook and worksheet
+    const ws = XLSX.utils.json_to_sheet(excelData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Returns');
+
+    // Set column widths for better readability
+    const colWidths = [
+      { wch: 6 },  // S.No
+      { wch: 20 }, // Payment Date
+      { wch: 10 }, // Unique #
+      { wch: 25 }, // Member Name
+      { wch: 15 }, // Alias Name
+      { wch: 20 }, // Village
+      { wch: 20 }, // Town
+      { wch: 18 }, // Total Deposits
+      { wch: 12 }, // Return Rate
+      { wch: 18 }, // Return Amount
+      { wch: 18 }, // Status
+      { wch: 30 }  // Notes
+    ];
+    ws['!cols'] = colWidths;
+
+    // Generate filename with month
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                        'July', 'August', 'September', 'October', 'November', 'December'];
+    const [year, month] = selectedMonth.split('-');
+    const monthName = monthNames[parseInt(month) - 1];
+    const fileName = `Returns_${monthName}_${year}.xlsx`;
+
+    // Download file
+    XLSX.writeFile(wb, fileName);
+  };
+
+  // Generate month options (last 12 months)
+  const getMonthOptions = () => {
+    const options = [];
+    const now = new Date();
+    
+    for (let i = 0; i < 12; i++) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const monthKey = `${year}-${month}`;
+      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                          'July', 'August', 'September', 'October', 'November', 'December'];
+      const monthName = monthNames[date.getMonth()];
+      options.push({ value: monthKey, label: `${monthName} ${year}` });
+    }
+    
+    return options;
   };
 
   if (loading) {
@@ -220,44 +373,70 @@ export default function MasterSheet() {
           </div>
         </div>
 
-        {/* Month & Controls */}
-        <div className="card" style={{ marginBottom: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>Viewing Month</p>
-              <h3 style={{ margin: '4px 0 0 0', fontSize: '22px', fontWeight: 800, color: '#1e293b' }}>
-                {selectedMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
-              </h3>
-            </div>
-            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              <button onClick={() => goToMonth(-1)} className="btn btn-secondary">← Previous</button>
-              <button onClick={() => goToMonth(1)} className="btn btn-secondary">Next →</button>
-              <button onClick={handleDownloadExcel} className="btn btn-primary">
-                ⬇ Download Excel
-              </button>
-            </div>
-          </div>
-
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label>Filter by Member</label>
-            <select
-              value={selectedMember}
-              onChange={(e) => setSelectedMember(e.target.value)}
-              style={{ fontSize: '16px', padding: '12px' }}
+        {/* Month Selector and Excel Export */}
+        <div className="card" style={{ marginBottom: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '16px' }}>
+            <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700 }}>📅 Select Month</h3>
+            <button
+              onClick={exportToExcel}
+              className="btn btn-success"
+              style={{
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                color: 'white',
+                border: 'none',
+                padding: '12px 24px',
+                fontSize: '16px',
+                fontWeight: 700,
+                borderRadius: '10px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+              }}
+              disabled={transactions.length === 0}
             >
-              <option value="">All Members</option>
-              {members.map(member => (
-                <option key={member.id} value={member.id}>
-                  {member.name} {member.unique_number && `(#${member.unique_number})`}
-                </option>
-              ))}
-            </select>
+              📥 Download Excel Sheet
+            </button>
           </div>
-          {selectedMember && (
+          
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label>Select Month *</label>
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                style={{ fontSize: '16px', padding: '12px', width: '100%' }}
+              >
+                {getMonthOptions().map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label>Filter by Member</label>
+              <select
+                value={selectedMember}
+                onChange={(e) => setSelectedMember(e.target.value)}
+                style={{ fontSize: '16px', padding: '12px', width: '100%' }}
+              >
+                <option value="">All Members</option>
+                {members.map(member => (
+                  <option key={member.id} value={member.id}>
+                    {member.name} {member.unique_number && `(#${member.unique_number})`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          
+          {(selectedMember) && (
             <button
               onClick={() => setSelectedMember('')}
               className="btn btn-secondary"
-              style={{ fontSize: '14px', padding: '8px 16px', alignSelf: 'flex-start' }}
+              style={{ fontSize: '14px', padding: '8px 16px', marginTop: '16px' }}
             >
               Clear Member Filter
             </button>
@@ -265,8 +444,23 @@ export default function MasterSheet() {
         </div>
 
         <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 700 }}>Returns Details</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '16px' }}>
+            <div>
+              <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 700 }}>Returns Details</h2>
+              <p style={{ margin: '4px 0 0 0', color: '#64748b', fontSize: '14px' }}>
+                {(() => {
+                  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                                    'July', 'August', 'September', 'October', 'November', 'December'];
+                  const [year, month] = selectedMonth.split('-');
+                  return monthNames[parseInt(month) - 1] + ' ' + year;
+                })()}
+              </p>
+              {transactions.some((t: any) => t.is_dynamic) && (
+                <p style={{ margin: '8px 0 0 0', color: '#92400e', fontSize: '12px', fontWeight: 600 }}>
+                  🔄 Showing live calculations - Returns will be saved on 2nd of month
+                </p>
+              )}
+            </div>
             <span style={{ 
               color: '#64748b', 
               fontSize: '14px',
@@ -286,8 +480,8 @@ export default function MasterSheet() {
                   <th>Payment Date</th>
                   <th>Member Details</th>
                   <th>Village - Town</th>
+                  <th>Total Deposits</th>
                   <th>Return Rate</th>
-                  <th>Days</th>
                   <th>Return Amount</th>
                   <th>Notes</th>
                 </tr>
@@ -303,33 +497,35 @@ export default function MasterSheet() {
                     </td>
                   </tr>
                 ) : (
-                  transactions.map((transaction) => (
-                    <tr key={`${transaction.transaction_type}-${transaction.id}`}>
-                      <td style={{ fontWeight: 600, color: '#1e293b' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{
-                            padding: '6px 10px',
-                            borderRadius: '8px',
-                            fontSize: '13px',
-                            fontWeight: 700,
-                            background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                            color: 'white',
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                          }}>
-                            {formatDate(transaction.date)}
-                          </span>
-                          <span style={{
-                            fontSize: '11px',
-                            color: '#64748b',
-                            background: '#f1f5f9',
-                            padding: '3px 8px',
-                            borderRadius: '6px',
-                            fontWeight: 600
-                          }}>
-                            2nd
-                          </span>
-                        </div>
-                      </td>
+                  transactions.map((transaction) => {
+                    // Calculate total deposits
+                    const totalDeposits = (transaction as any).deposits && (transaction as any).deposits.length > 0
+                      ? (transaction as any).deposits.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0)
+                      : 0;
+                    
+                    // Get month and year from transaction date
+                    const transDate = new Date(transaction.date);
+                    const monthYear = transDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+                    
+                    return (
+                      <tr key={`${transaction.transaction_type}-${transaction.id}`}>
+                        <td style={{ fontWeight: 600, color: '#1e293b' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <span style={{
+                              padding: '8px 12px',
+                              borderRadius: '8px',
+                              fontSize: '14px',
+                              fontWeight: 700,
+                              background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                              color: 'white',
+                              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                              display: 'inline-block',
+                              width: 'fit-content'
+                            }}>
+                              2nd {monthYear}
+                            </span>
+                          </div>
+                        </td>
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -362,63 +558,56 @@ export default function MasterSheet() {
                           : (transaction as any).village || (transaction as any).town || 
                             <span style={{ color: '#94a3b8' }}>-</span>}
                       </td>
-                      <td>
-                        {(transaction as any).percentage_of_return ? (
-                          <span style={{
-                            background: '#f0fdf4',
-                            color: '#166534',
-                            padding: '6px 12px',
-                            borderRadius: '8px',
-                            fontSize: '14px',
-                            fontWeight: 700,
-                            border: '1px solid #bbf7d0'
-                          }}>
-                            {(transaction as any).percentage_of_return}%
-                          </span>
-                        ) : (
-                          <span style={{ color: '#94a3b8' }}>-</span>
-                        )}
-                      </td>
-                      <td>
-                        {(transaction as any).interest_days ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <td style={{ fontWeight: 700, color: '#10b981', fontSize: '16px' }}>
+                          {totalDeposits > 0 ? formatCurrency(totalDeposits) : <span style={{ color: '#94a3b8' }}>₹0</span>}
+                        </td>
+                        <td>
+                          {(transaction as any).percentage_of_return ? (
                             <span style={{
-                              background: '#eff6ff',
-                              color: '#1e40af',
+                              background: '#f0fdf4',
+                              color: '#166534',
                               padding: '6px 12px',
                               borderRadius: '8px',
-                              fontSize: '15px',
+                              fontSize: '14px',
                               fontWeight: 700,
-                              border: '1px solid #bfdbfe',
-                              textAlign: 'center'
+                              border: '1px solid #bbf7d0'
                             }}>
-                              {(transaction as any).interest_days} days
+                              {(transaction as any).percentage_of_return}%
                             </span>
-                            <span style={{ 
-                              fontSize: '10px', 
-                              color: '#64748b', 
-                              textAlign: 'center',
-                              fontWeight: 500
-                            }}>
-                              {(transaction as any).interest_days < 30 ? '(First month)' : '(Full month)'}
-                            </span>
+                          ) : (
+                            <span style={{ color: '#94a3b8' }}>-</span>
+                          )}
+                        </td>
+                        <td style={{
+                          color: '#3b82f6',
+                          fontWeight: 800,
+                          fontSize: '18px'
+                        }}>
+                          {formatCurrency(Math.abs(transaction.amount))}
+                        </td>
+                        <td style={{ fontSize: '12px', color: '#64748b' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            {(transaction as any).is_dynamic && (
+                              <span style={{
+                                background: '#fef3c7',
+                                color: '#92400e',
+                                padding: '4px 8px',
+                                borderRadius: '6px',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                border: '1px solid #fbbf24',
+                                display: 'inline-block',
+                                width: 'fit-content'
+                              }}>
+                                🔄 Live Calculation
+                              </span>
+                            )}
+                            <span>{transaction.notes || <span style={{ color: '#94a3b8' }}>-</span>}</span>
                           </div>
-                        ) : (
-                          <span style={{ color: '#94a3b8' }}>-</span>
-                        )}
-                      </td>
-                      <td style={{
-                        color: '#3b82f6',
-                        fontWeight: 800,
-                        fontSize: '18px'
-                      }}>
-                        {formatCurrency(Math.abs(transaction.amount))}
-                      </td>
-                      <td style={{ fontSize: '12px', color: '#64748b' }}>
-                        {transaction.notes || <span style={{ color: '#94a3b8' }}>-</span>}
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

@@ -35,9 +35,16 @@ export default function Transactions() {
     try {
       const res = await fetch('/api/transactions/all');
       const data = await res.json();
-      setTransactions(data);
+      // Ensure data is an array
+      if (Array.isArray(data)) {
+        setTransactions(data);
+      } else {
+        console.error('Invalid data format:', data);
+        setTransactions([]);
+      }
     } catch (error) {
       console.error('Error fetching transactions:', error);
+      setTransactions([]);
     } finally {
       setLoading(false);
     }
@@ -173,7 +180,7 @@ export default function Transactions() {
                     </td>
                   </tr>
                 ) : (
-                  transactions.map((transaction, index) => {
+                  Array.isArray(transactions) && transactions.map((transaction, index) => {
                     const transactionType = transaction.type || (transaction as any).transaction_type || 'deposit';
                     return (
                       <tr key={`${transactionType}-${transaction.id}-${index}`}>

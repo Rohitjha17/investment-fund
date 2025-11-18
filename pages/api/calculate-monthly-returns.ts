@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import db from '@/lib/db';
+import db from '@/lib/db-firebase';
 import { calculateComplexInterest, getPreviousMonthWindow, isSecondOfMonth } from '@/lib/utils';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -8,9 +8,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    // For testing: Allow bypass of date check with ?force=true query parameter
     const { force } = req.query;
     const isForceMode = force === 'true' || req.body?.force === true;
 
+    // Check if today is 2nd of the month (skip if force mode)
     if (!isSecondOfMonth() && req.method === 'GET' && !isForceMode) {
       return res.status(200).json({
         message: 'Automatic calculation runs on 2nd of each month. Use ?force=true to test manually.',
@@ -20,23 +22,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
+    // Get previous month window (1-30)
     const { start, end, month } = getPreviousMonthWindow();
 
-    if (await db.isMonthCalculated(month)) {
-      if (!isForceMode) {
-        return res.status(200).json({
-          message: `Returns for ${month} already calculated`,
-          month,
-          calculated: true,
-          tip: 'Use ?force=true to recalculate'
-        });
-      }
+    // Check if already calculated (skip if force mode)
+    if (await db.isMonthCalculated(month) && !isForceMode) {
+      return res.status(200).json({
+        message: `Returns for ${month} already calculated`,
+        month,
+        calculated: true,
+        tip: 'Use ?force=true to recalculate'
+      });
     }
 
+    // Get all members
     const allMembers = await db.getMembers();
     let calculatedCount = 0;
     let totalReturns = 0;
 
+    // Calculate returns for each member
     for (const memberData of allMembers) {
       const member = await db.getMember(memberData.id);
       if (!member) continue;
@@ -44,13 +48,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const deposits = member.deposits || [];
       const withdrawals = member.withdrawals || [];
 
+      // Skip if no deposits
       if (deposits.length === 0) continue;
 
+      // Calculate interest for previous month (1-30 day window)
       const interest = calculateComplexInterest(
         deposits.map((d: any) => ({
           amount: d.amount,
           date: d.deposit_date,
-          percentage: d.percentage !== null && d.percentage !== undefined ? d.percentage : member.percentage_of_return
+          percentage: d.percentage !== null && d.percentage !== undefined
+            ? d.percentage
+            : member.percentage_of_return
         })),
         withdrawals.map((w: any) => ({
           amount: w.amount,
@@ -61,10 +69,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         end
       );
 
+      // Only create return if interest > 0
       if (interest > 0) {
+        // Return date is 2nd of current month (when calculation runs)
         const returnDate = new Date();
-        returnDate.setDate(2);
-
+        returnDate.setDate(2); // Always 2nd of current month
+        
         await db.createReturn({
           member_id: member.id,
           return_amount: interest,
@@ -78,6 +88,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
+    // Mark month as calculated
     await db.markMonthCalculated(month);
 
     return res.status(200).json({
@@ -85,6 +96,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       month,
       membersCalculated: calculatedCount,
       totalReturns: Math.round(totalReturns * 100) / 100,
+      calculated: true,
       calculationDate: new Date().toISOString()
     });
   } catch (error) {

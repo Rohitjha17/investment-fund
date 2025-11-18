@@ -1,8 +1,9 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import db from '@/lib/db';
+import db from '@/lib/db-firebase';
 import { parseDate } from '@/lib/utils';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // GET all deposits
   if (req.method === 'GET') {
     try {
       const deposits = await db.getDeposits();
@@ -13,6 +14,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
+  // POST create deposit
   if (req.method === 'POST') {
     try {
       const { member_id, amount, deposit_date, percentage, notes } = req.body;
@@ -22,7 +24,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       const parsedDate = parseDate(deposit_date);
-
+      
       const deposit = await db.createDeposit({
         member_id,
         amount,

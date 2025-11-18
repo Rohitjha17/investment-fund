@@ -1,20 +1,17 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import db from '@/lib/db';
+import db from '@/lib/db-firebase';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
     try {
-      const { member_id, start_date, end_date, month } = req.query;
+      const { member_id, start_date, end_date } = req.query;
 
-      const [deposits, withdrawals, returns, members] = await Promise.all([
-        db.getDeposits(),
-        db.getWithdrawals(),
-        db.getReturns(),
-        db.getMembers()
-      ]);
+      // Get all transactions
+      const deposits = await db.getDeposits();
+      const withdrawals = await db.getWithdrawals();
+      const returns = await db.getReturns();
 
-      const memberMap = new Map(members.map((m: any) => [m.id, m]));
-
+      // Combine all transactions
       const allTransactions: any[] = [
         ...deposits.map((d: any) => ({
           id: d.id,
@@ -44,60 +41,97 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           notes: w.notes,
           created_at: w.created_at
         })),
-        ...returns.map((r: any) => {
-          const member = memberMap.get(r.member_id);
+        ...(await Promise.all(returns.map(async (r: any) => {
+          // Always fetch latest member details to ensure data is up-to-date
+          const memberId = parseInt(r.member_id) || r.member_id;
+          let member = await db.getMember(parseInt(memberId));
+          
+          // If member not found with parsed ID, try with original ID
+          if (!member && memberId !== parseInt(memberId)) {
+            member = await db.getMember(memberId);
+          }
+          
+          // If still no member, return basic info from return record
+          if (!member) {
+            return {
+              id: r.id,
+              type: 'return',
+              transaction_type: 'return',
+              member_id: memberId,
+              member_name: r.member_name || 'Unknown',
+              alias_name: null,
+              unique_number: null,
+              village: null,
+              town: null,
+              percentage_of_return: null,
+              deposits: [],
+              amount: r.return_amount,
+              date: r.return_date,
+              percentage: null,
+              interest_days: r.interest_days,
+              notes: r.notes,
+              created_at: r.created_at
+            };
+          }
+          
+          // Get current deposits (always fetch latest)
+          const memberDeposits = member.deposits || [];
+          
+          // Ensure we have valid deposits data with all details
+          const depositsData = memberDeposits.length > 0 ? memberDeposits.map((d: any) => ({
+            id: parseInt(d.id) || d.id,
+            amount: parseFloat(d.amount) || 0,
+            deposit_date: d.deposit_date || '',
+            percentage: d.percentage !== null && d.percentage !== undefined 
+              ? parseFloat(d.percentage) 
+              : (member?.percentage_of_return || 0),
+            notes: d.notes || null
+          })) : [];
+          
+          // Return with latest member details
           return {
             id: r.id,
             type: 'return',
             transaction_type: 'return',
-            member_id: r.member_id,
-            member_name: r.member_name,
-            alias_name: r.alias_name,
-            unique_number: member?.unique_number || null,
-            village: member?.village || null,
-            town: member?.town || null,
-            percentage_of_return: member?.percentage_of_return || null,
+            member_id: memberId,
+            member_name: member.name || r.member_name || '',
+            alias_name: member.alias_name || null,
+            unique_number: member.unique_number || null,
+            village: member.village || null,
+            town: member.town || null,
+            percentage_of_return: member.percentage_of_return || null,
+            deposits: depositsData,
             amount: r.return_amount,
             date: r.return_date,
             percentage: null,
             interest_days: r.interest_days,
             notes: r.notes,
-            created_at: r.created_at
+            created_at: r.created_at,
+            last_updated: new Date().toISOString() // Track when data was fetched
           };
-        })
+        })))
       ];
 
+      // Filter by member_id if provided
       let filteredTransactions = allTransactions;
       if (member_id) {
-        filteredTransactions = filteredTransactions.filter(
-          (t) => t.member_id === parseInt(member_id as string, 10)
-        );
+        filteredTransactions = filteredTransactions.filter(t => t.member_id === parseInt(member_id as string));
       }
 
-      let rangeStart: Date | null = null;
-      let rangeEnd: Date | null = null;
-
-      if (month && typeof month === 'string') {
-        const [yearStr, monthStr] = month.split('-');
-        if (yearStr && monthStr) {
-          const year = parseInt(yearStr, 10);
-          const monthIndex = parseInt(monthStr, 10) - 1;
-          rangeStart = new Date(year, monthIndex, 1);
-          rangeEnd = new Date(year, monthIndex, 30, 23, 59, 59, 999);
-        }
-      } else if (start_date && end_date) {
-        rangeStart = new Date(start_date as string);
-        rangeEnd = new Date(end_date as string);
-        rangeEnd.setHours(23, 59, 59, 999);
-      }
-
-      if (rangeStart && rangeEnd) {
-        filteredTransactions = filteredTransactions.filter((t) => {
+      // Filter by date range if provided
+      if (start_date && end_date) {
+        const start = new Date(start_date as string);
+        const end = new Date(end_date as string);
+        // Set end date to end of day
+        end.setHours(23, 59, 59, 999);
+        
+        filteredTransactions = filteredTransactions.filter(t => {
           const transactionDate = new Date(t.date);
-          return transactionDate >= rangeStart! && transactionDate <= rangeEnd!;
+          return transactionDate >= start && transactionDate <= end;
         });
       }
 
+      // Sort by date (newest first)
       filteredTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
       return res.status(200).json(filteredTransactions);

@@ -44,6 +44,7 @@ export function isSecondOfMonth(): boolean {
 }
 
 // Complex interest calculation with multiple deposits/withdrawals and different rates
+// Each deposit maintains its own percentage rate
 // ALWAYS clamps to provided window (1-30 day cycle)
 export function calculateComplexInterest(
   deposits: Array<{ amount: number; date: string; percentage?: number }>,
@@ -55,147 +56,69 @@ export function calculateComplexInterest(
   if (deposits.length === 0) return 0;
   if (!startDate || !endDate) return 0;
 
-  // Sort all transactions by date
-  const transactions: Array<{
-    date: Date;
-    type: 'deposit' | 'withdrawal';
+  const periodStart = new Date(startDate);
+  const periodEnd = new Date(endDate);
+
+  // Track each deposit separately with its own rate
+  const depositSegments: Array<{
     amount: number;
-    percentage?: number;
+    rate: number;
+    startDate: Date; // Interest start date (deposit date + 1)
   }> = [];
 
+  // Process deposits
   deposits.forEach(d => {
-    // Parse date string (YYYY-MM-DD) and create at midnight local time
     const dateParts = d.date.split('-');
     const depositDate = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]));
     if (isNaN(depositDate.getTime())) return;
     
-    // Start counting from next day after deposit (interest starts from next day)
+    // Interest starts from next day after deposit
     const interestStartDate = new Date(depositDate);
     interestStartDate.setDate(interestStartDate.getDate() + 1);
     
-    transactions.push({
-      date: interestStartDate,
-      type: 'deposit',
+    depositSegments.push({
       amount: d.amount,
-      percentage: d.percentage !== null && d.percentage !== undefined ? d.percentage : defaultPercentage
+      rate: d.percentage !== null && d.percentage !== undefined ? d.percentage : defaultPercentage,
+      startDate: interestStartDate
     });
   });
 
+  // Process withdrawals - reduce deposits proportionally (FIFO)
   withdrawals.forEach(w => {
-    // Parse date string (YYYY-MM-DD) and create at midnight local time
     const dateParts = w.date.split('-');
     const withdrawalDate = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]));
     if (isNaN(withdrawalDate.getTime())) return;
     
-    transactions.push({
-      date: withdrawalDate,
-      type: 'withdrawal',
-      amount: w.amount
-    });
-  });
-
-  transactions.sort((a, b) => a.date.getTime() - b.date.getTime());
-
-  // Use provided window - NO auto-calculation
-  const periodStart = new Date(startDate);
-  const periodEnd = new Date(endDate);
-
-  let totalInterest = 0;
-  let currentBalance = 0;
-  let currentRate = defaultPercentage;
-  let lastDate = new Date(periodStart);
-  
-  // Track balance changes over time with rates
-  const balanceSegments: Array<{
-    amount: number;
-    rate: number;
-    startDate: Date;
-    endDate: Date;
-  }> = [];
-
-  // Process transactions within the window
-  transactions.forEach((transaction, index) => {
-    // Skip if transaction is outside window
-    if (transaction.date > periodEnd) return;
+    let remainingWithdrawal = w.amount;
     
-    const nextDate = index < transactions.length - 1 
-      ? transactions[index + 1].date 
-      : periodEnd;
-    
-    if (transaction.type === 'deposit') {
-      // For deposits: calculate interest for balance BEFORE this deposit (if any)
-      // Segment from lastDate until this deposit's interest start date
-      if (currentBalance > 0) {
-        const segmentStart = new Date(Math.max(lastDate.getTime(), periodStart.getTime()));
-        const segmentEnd = new Date(Math.min(transaction.date.getTime(), periodEnd.getTime()));
-        
-        if (segmentStart < segmentEnd) {
-          balanceSegments.push({
-            amount: currentBalance,
-            rate: currentRate,
-            startDate: segmentStart,
-            endDate: segmentEnd
-          });
-        }
+    // Reduce from oldest deposits first (FIFO)
+    for (let i = 0; i < depositSegments.length && remainingWithdrawal > 0; i++) {
+      if (depositSegments[i].amount > 0) {
+        const reduction = Math.min(depositSegments[i].amount, remainingWithdrawal);
+        depositSegments[i].amount -= reduction;
+        remainingWithdrawal -= reduction;
       }
-      
-      // Update balance and rate for this deposit
-      currentBalance += transaction.amount;
-      currentRate = transaction.percentage !== null && transaction.percentage !== undefined 
-        ? transaction.percentage 
-        : defaultPercentage;
-      
-      // Set lastDate to the deposit's interest start date (from which new balance earns interest)
-      lastDate = new Date(transaction.date);
-    } else {
-      // For withdrawals: calculate interest for balance BEFORE withdrawal
-      const segmentStart = new Date(Math.max(lastDate.getTime(), periodStart.getTime()));
-      const segmentEnd = new Date(Math.min(transaction.date.getTime(), periodEnd.getTime()));
-      
-      if (currentBalance > 0 && segmentStart < segmentEnd) {
-        balanceSegments.push({
-          amount: currentBalance,
-          rate: currentRate,
-          startDate: segmentStart,
-          endDate: segmentEnd
-        });
-      }
-      
-      // Update balance after withdrawal
-      currentBalance -= transaction.amount;
-      if (currentBalance < 0) currentBalance = 0;
-      
-      lastDate = new Date(transaction.date);
     }
   });
 
-  // Calculate interest for remaining balance until period end
-  if (currentBalance > 0) {
-    const effectiveStart = new Date(Math.max(lastDate.getTime(), periodStart.getTime()));
+  // Calculate interest for each deposit separately
+  let totalInterest = 0;
+
+  depositSegments.forEach(segment => {
+    if (segment.amount <= 0) return;
+
+    // Calculate interest start and end dates for this deposit
+    const effectiveStart = new Date(Math.max(segment.startDate.getTime(), periodStart.getTime()));
     const effectiveEnd = new Date(periodEnd);
     
-    if (effectiveStart < effectiveEnd) {
-      balanceSegments.push({
-        amount: currentBalance,
-        rate: currentRate,
-        startDate: effectiveStart,
-        endDate: effectiveEnd
-      });
-    }
-  }
-
-  // Calculate total interest from all segments (clamped to window)
-  balanceSegments.forEach(segment => {
-    // Clamp segment to window
-    const segmentStart = new Date(Math.max(segment.startDate.getTime(), periodStart.getTime()));
-    const segmentEnd = new Date(Math.min(segment.endDate.getTime(), periodEnd.getTime()));
-    
-    if (segmentStart >= segmentEnd) return;
+    if (effectiveStart >= effectiveEnd) return;
     
     // Calculate days - add 1 to include both start and end dates (inclusive)
-    const days = Math.floor((segmentEnd.getTime() - segmentStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    const days = Math.floor((effectiveEnd.getTime() - effectiveStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    
     if (days > 0) {
-      totalInterest += calculateInterestSimple(segment.amount, segment.rate, days);
+      const interest = calculateInterestSimple(segment.amount, segment.rate, days);
+      totalInterest += interest;
     }
   });
 

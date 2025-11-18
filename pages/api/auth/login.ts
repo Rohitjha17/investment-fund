@@ -1,11 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import bcrypt from 'bcryptjs';
-import db from '@/lib/db';
-import { sendEmail } from '@/lib/email';
-
-function generateOtp() {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
+import { auth } from '@/lib/firebase';
+import { signInWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -15,45 +10,75 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({ error: 'Valid email is required' });
     }
 
-    const admin = await db.getAdminByUsername(email);
-
-    if (!admin) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+    if (!password) {
+      return res.status(400).json({ error: 'Password is required' });
     }
 
-    const isValid = bcrypt.compareSync(password, admin.password);
+    try {
+      // Sign in user
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
 
-    if (!isValid) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      // Check if email is verified
+      if (!user.emailVerified) {
+        // Reload user to get latest verification status
+        await user.reload();
+
+        // If still not verified, send verification email again
+        if (!user.emailVerified) {
+          try {
+            await sendEmailVerification(user, {
+              url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/login`,
+              handleCodeInApp: false,
+            });
+          } catch (verifyError) {
+            console.error('Error sending verification email:', verifyError);
+          }
+
+          return res.status(403).json({
+            error: 'Please verify your email address before logging in.',
+            emailVerified: false,
+            message: 'A verification email has been sent. Please check your inbox and click the verification link.',
+            resendEmail: true
+          });
+        }
+      }
+
+      // Email is verified, get token and set session
+      const token = await user.getIdToken();
+
+      // Set HTTP-only session cookie (expires when browser closes)
+      res.setHeader('Set-Cookie', `auth_token=${token}; HttpOnly; Path=/; SameSite=Strict`);
+
+      return res.status(200).json({
+        success: true,
+        authenticated: true,
+        user: {
+          email: user.email,
+          uid: user.uid,
+          emailVerified: user.emailVerified
+        }
+      });
+    } catch (error: any) {
+      if (error.code === 'auth/user-not-found') {
+        return res.status(401).json({ error: 'No account found with this email. Please register first.' });
+      } else if (error.code === 'auth/wrong-password') {
+        return res.status(401).json({ error: 'Incorrect password.' });
+      } else if (error.code === 'auth/invalid-email') {
+        return res.status(400).json({ error: 'Invalid email address.' });
+      } else if (error.code === 'auth/user-disabled') {
+        return res.status(403).json({ error: 'This account has been disabled.' });
+      } else {
+        console.error('Error signing in:', error);
+        return res.status(500).json({ error: 'Failed to sign in: ' + error.message });
+      }
     }
-
-    const otp = generateOtp();
-    await db.saveOtpRecord({
-      email,
-      otp,
-      purpose: 'login',
-      expires_at: Date.now() + 5 * 60 * 1000
-    });
-
-    await sendEmail({
-      to: email,
-      subject: 'Your LakhDatar Admin OTP',
-      html: `
-        <p>Hi ${admin.username},</p>
-        <p>Your one-time password is:</p>
-        <p style="font-size: 32px; font-weight: 700; letter-spacing: 4px;">${otp}</p>
-        <p>This OTP will expire in 5 minutes.</p>
-        <p>If you did not request this login, please secure your account immediately.</p>
-      `
-    });
-
-    return res.status(200).json({ success: true, message: 'OTP sent to email' });
-  } catch (error) {
-    console.error('Login error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+  } catch (error: any) {
+    console.error('Error in login:', error);
+    return res.status(500).json({ error: 'Failed to process request' });
   }
 }

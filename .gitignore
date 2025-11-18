@@ -25,9 +25,15 @@ yarn-error.log*
 # Local env files
 .env*.local
 
-# Database
+# Database (Firestore is used now, local files no longer needed)
 *.db
 *.db-journal
+investment.json
+backups/
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
 
 # IDE
 .vscode/

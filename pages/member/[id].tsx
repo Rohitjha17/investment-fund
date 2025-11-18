@@ -27,6 +27,8 @@ export default function MemberDetail() {
   const [memberError, setMemberError] = useState<string | null>(null);
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
+  const [currentReturn, setCurrentReturn] = useState<{ amount: number; period_info: string } | null>(null);
+  const [depositBreakdown, setDepositBreakdown] = useState<Record<number, number>>({});
   const [transactionForm, setTransactionForm] = useState({
     amount: '',
     date: '',
@@ -84,6 +86,33 @@ export default function MemberDetail() {
         withdrawals: Array.isArray(data.withdrawals) ? data.withdrawals : [],
         returns: Array.isArray(data.returns) ? data.returns : []
       });
+
+      // Fetch current returns
+      try {
+        const returnsRes = await fetch('/api/member/current-returns', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ member_id: data.id })
+        });
+        const returnsData = await returnsRes.json();
+        if (returnsRes.ok) {
+          setCurrentReturn({
+            amount: returnsData.current_return || 0,
+            period_info: returnsData.period_info || ''
+          });
+          
+          // Store deposit breakdown
+          if (returnsData.deposit_breakdown && Array.isArray(returnsData.deposit_breakdown)) {
+            const breakdown: Record<number, number> = {};
+            returnsData.deposit_breakdown.forEach((item: any) => {
+              breakdown[item.deposit_id] = item.interest;
+            });
+            setDepositBreakdown(breakdown);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching current returns:', error);
+      }
     } catch (error) {
       console.error('Error fetching member:', error);
       setMemberError(
@@ -210,7 +239,6 @@ export default function MemberDetail() {
 
   const totalDeposits = member.deposits.reduce((sum, d) => sum + d.amount, 0);
   const totalWithdrawals = member.withdrawals.reduce((sum, w) => sum + w.amount, 0);
-  const totalReturns = member.returns.reduce((sum, r) => sum + r.return_amount, 0);
   const currentBalance = totalDeposits - totalWithdrawals;
 
   return (
@@ -340,8 +368,15 @@ export default function MemberDetail() {
                 borderRadius: '12px',
                 backdropFilter: 'blur(10px)'
               }}>
-                <p style={{ fontSize: '12px', opacity: 0.9, marginBottom: '4px' }}>Total Returns</p>
-                <p style={{ fontSize: '24px', fontWeight: 700, margin: 0 }}>{formatCurrency(totalReturns)}</p>
+                <p style={{ fontSize: '12px', opacity: 0.9, marginBottom: '4px' }}>Current Month Return</p>
+                <p style={{ fontSize: '24px', fontWeight: 700, margin: 0 }}>
+                  {currentReturn ? formatCurrency(currentReturn.amount) : '₹0'}
+                </p>
+                {currentReturn && currentReturn.period_info && (
+                  <p style={{ fontSize: '10px', opacity: 0.8, margin: '4px 0 0 0' }}>
+                    {currentReturn.period_info}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -360,6 +395,7 @@ export default function MemberDetail() {
                     <th>Date</th>
                     <th>Amount</th>
                     <th>Interest Rate</th>
+                    <th>Current Month Interest</th>
                     <th>Notes</th>
                   </tr>
                 </thead>
@@ -371,9 +407,12 @@ export default function MemberDetail() {
                         ? deposit.percentage 
                         : member.percentage_of_return;
                       
+                      // Get current month interest from API breakdown
+                      const currentMonthInterest = depositBreakdown[deposit.id] || 0;
+                      
                       return (
                         <tr key={deposit.id}>
-                          <td style={{ fontWeight: 600, color: '#64748b' }}>#{index + 1}</td>
+                          <td style={{ fontWeight: 600, color: '#64748b' }}>Deposit {index + 1}</td>
                           <td style={{ fontWeight: 500 }}>{formatDate(deposit.deposit_date)}</td>
                           <td style={{ fontWeight: 700, color: '#10b981', fontSize: '16px' }}>
                             {formatCurrency(deposit.amount)}
@@ -396,6 +435,9 @@ export default function MemberDetail() {
                             }}>
                               {depositRate}%
                             </span>
+                          </td>
+                          <td style={{ fontWeight: 700, color: '#8b5cf6', fontSize: '15px' }}>
+                            {formatCurrency(currentMonthInterest)}
                           </td>
                           <td>{deposit.notes || <span style={{ color: '#94a3b8' }}>-</span>}</td>
                         </tr>
@@ -440,55 +482,6 @@ export default function MemberDetail() {
             </div>
           )}
         </div>
-
-        <div className="card">
-          <h2 style={{ marginBottom: '20px', fontSize: '24px', fontWeight: 700 }}>📈 Returns / Interest Payments</h2>
-          {member.returns.length === 0 ? (
-            <p style={{ color: '#64748b', textAlign: 'center', padding: '40px' }}>No returns found.</p>
-          ) : (
-            <div style={{ overflowX: 'auto', borderRadius: '12px' }}>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Date</th>
-                    <th>Amount</th>
-                    <th>Interest Days</th>
-                    <th>Notes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {member.returns
-                    .sort((a, b) => new Date(b.return_date).getTime() - new Date(a.return_date).getTime())
-                    .map((returnItem, index) => (
-                      <tr key={returnItem.id}>
-                        <td style={{ fontWeight: 600, color: '#64748b' }}>#{index + 1}</td>
-                        <td style={{ fontWeight: 500 }}>{formatDate(returnItem.return_date)}</td>
-                        <td style={{ fontWeight: 700, color: '#3b82f6', fontSize: '16px' }}>
-                          {formatCurrency(returnItem.return_amount)}
-                        </td>
-                        <td>
-                          <span style={{
-                            background: '#eff6ff',
-                            color: '#1e40af',
-                            padding: '4px 10px',
-                            borderRadius: '6px',
-                            fontSize: '13px',
-                            fontWeight: 600
-                          }}>
-                            {returnItem.interest_days} days
-                          </span>
-                        </td>
-                        <td>{returnItem.notes || <span style={{ color: '#94a3b8' }}>-</span>}</td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-
 
         {/* Deposit Modal */}
         {showDepositModal && (

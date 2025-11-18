@@ -1,8 +1,9 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import db from '@/lib/db';
+import db from '@/lib/db-firebase';
 import { parseDate } from '@/lib/utils';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // GET all returns
   if (req.method === 'GET') {
     try {
       const returns = await db.getReturns();
@@ -13,6 +14,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
+  // POST create return
   if (req.method === 'POST') {
     try {
       const { member_id, return_amount, return_date, interest_days, notes } = req.body;

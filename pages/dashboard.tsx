@@ -17,6 +17,12 @@ interface Member {
   total_deposits: number;
   total_withdrawals: number;
   total_returns: number;
+  deposits?: Array<{
+    id: number;
+    amount: number;
+    deposit_date: string;
+    percentage?: number | null;
+  }>;
 }
 
 export default function Dashboard() {
@@ -27,6 +33,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
+  const [currentReturns, setCurrentReturns] = useState<Record<number, number>>({});
   const [formData, setFormData] = useState({
     name: '',
     alias_name: '',
@@ -78,6 +85,25 @@ export default function Dashboard() {
       const data = await res.json();
       setMembers(data);
       setFilteredMembers(data);
+      
+      // Fetch current returns for each member
+      const returnsMap: Record<number, number> = {};
+      await Promise.all(data.map(async (member: Member) => {
+        try {
+          const returnsRes = await fetch('/api/member/current-returns', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ member_id: member.id })
+          });
+          const returnsData = await returnsRes.json();
+          if (returnsRes.ok) {
+            returnsMap[member.id] = returnsData.current_return || 0;
+          }
+        } catch (error) {
+          console.error(`Error fetching returns for member ${member.id}:`, error);
+        }
+      }));
+      setCurrentReturns(returnsMap);
     } catch (error) {
       console.error('Error fetching members:', error);
     } finally {
@@ -414,9 +440,9 @@ export default function Dashboard() {
                   <th>Name</th>
                   <th>Alias</th>
                   <th>Village - Town</th>
-                  <th>Amount (Deposit)</th>
-                  <th>Total Returns</th>
-                  <th>Return %</th>
+                  <th>Total Deposits</th>
+                  <th>Current Month Return</th>
+                  <th>Default Return %</th>
                   <th>Referral</th>
                   <th>Actions</th>
                 </tr>
@@ -424,7 +450,7 @@ export default function Dashboard() {
               <tbody>
                 {filteredMembers.length === 0 ? (
                   <tr>
-                    <td colSpan={9} style={{ textAlign: 'center', padding: '60px 20px' }}>
+                    <td colSpan={8} style={{ textAlign: 'center', padding: '60px 20px' }}>
                       <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔍</div>
                       <p style={{ fontSize: '16px', color: '#64748b', fontWeight: 500 }}>
                         {searchQuery ? 'No members found matching your search.' : 'No members found. Click "Add Member" to add one.'}
@@ -453,11 +479,11 @@ export default function Dashboard() {
                           ? `${member.village} - ${member.town}`
                           : member.village || member.town || <span style={{ color: '#94a3b8' }}>-</span>}
                       </td>
-                      <td style={{ fontWeight: 600, color: '#10b981' }}>
-                        {formatCurrency(member.total_deposits - member.total_withdrawals)}
+                      <td style={{ fontWeight: 700, color: '#10b981', fontSize: '16px' }}>
+                        {formatCurrency(member.total_deposits)}
                       </td>
-                      <td style={{ fontWeight: 700, color: '#3b82f6', fontSize: '16px' }}>
-                        {formatCurrency(member.total_returns)}
+                      <td style={{ fontWeight: 700, color: '#8b5cf6', fontSize: '16px' }}>
+                        {formatCurrency(currentReturns[member.id] || 0)}
                       </td>
                       <td>
                         <span style={{

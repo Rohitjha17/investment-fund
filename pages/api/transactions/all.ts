@@ -1,33 +1,32 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import db from '@/lib/db';
+import db from '@/lib/db-firebase';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
     try {
-      const [deposits, withdrawals, returns] = await Promise.all([
-        db.getDeposits(),
-        db.getWithdrawals(),
-        db.getReturns()
-      ]);
+      const deposits = await db.getDeposits();
+      const withdrawals = await db.getWithdrawals();
+      const returns = await db.getReturns();
 
+      // Combine and sort by date
       const allTransactions = [
-        ...deposits.map((d: any) => ({
-          ...d,
-          date: d.deposit_date,
+        ...deposits.map((d: any) => ({ 
+          ...d, 
+          date: d.deposit_date, 
           amount: d.amount,
           type: 'deposit',
           transaction_type: 'deposit'
         })),
-        ...withdrawals.map((w: any) => ({
-          ...w,
-          date: w.withdrawal_date,
+        ...withdrawals.map((w: any) => ({ 
+          ...w, 
+          date: w.withdrawal_date, 
           amount: Math.abs(w.amount),
           type: 'withdrawal',
           transaction_type: 'withdrawal'
         })),
-        ...returns.map((r: any) => ({
-          ...r,
-          date: r.return_date,
+        ...returns.map((r: any) => ({ 
+          ...r, 
+          date: r.return_date, 
           amount: r.return_amount,
           type: 'return',
           transaction_type: 'return'

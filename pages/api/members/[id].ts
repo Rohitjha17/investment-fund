@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import db from '@/lib/db';
+import db from '@/lib/db-firebase';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { id } = req.query;
@@ -8,12 +8,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Invalid member ID' });
   }
 
-  const memberId = parseInt(id, 10);
+  const memberId = parseInt(id);
 
+  // GET single member
   if (req.method === 'GET') {
     try {
       const member = await db.getMember(memberId);
-
+      
       if (!member) {
         return res.status(404).json({ error: 'Member not found' });
       }
@@ -25,6 +26,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
+  // PUT update member
   if (req.method === 'PUT') {
     try {
       const {
@@ -60,6 +62,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
+  // DELETE member
   if (req.method === 'DELETE') {
     try {
       const success = await db.deleteMember(memberId);

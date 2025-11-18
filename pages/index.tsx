@@ -7,36 +7,22 @@ export default function Login() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [otp, setOtp] = useState('');
-  const [step, setStep] = useState<'login' | 'otp' | 'forgot'>('login');
-  const [infoMessage, setInfoMessage] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [step, setStep] = useState<'login' | 'register' | 'forgot-password'>('login');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [forgotStage, setForgotStage] = useState<'request' | 'verify'>('request');
-  const [forgotEmail, setForgotEmail] = useState('');
-  const [forgotOtp, setForgotOtp] = useState('');
-  const [newPassword, setNewPassword] = useState('');
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [emailVerificationSent, setEmailVerificationSent] = useState(false);
+  const [emailNotVerified, setEmailNotVerified] = useState(false);
 
-  useEffect(() => {
-    // Check if already logged in
-    fetch('/api/auth/check')
-      .then(res => res.json())
-      .then(data => {
-        if (data.authenticated) {
-          router.push('/dashboard');
-        }
-      });
-  }, [router]);
+  // No auto-login check - user must login every time website opens
 
-  const resetMessages = () => {
-    setError('');
-    setInfoMessage('');
-  };
-
-  const handleLoginSubmit = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    resetMessages();
+    setError('');
     setLoading(true);
+    setEmailNotVerified(false);
+    setEmailVerificationSent(false);
 
     try {
       const res = await fetch('/api/auth/login', {
@@ -47,11 +33,16 @@ export default function Login() {
 
       const data = await res.json();
 
-      if (res.ok) {
-        setStep('otp');
-        setInfoMessage('OTP sent to your email. Please enter it below.');
+      if (res.ok && data.authenticated) {
+        router.push('/dashboard');
       } else {
-        setError(data.error || 'Login failed');
+        if (data.emailVerified === false) {
+          setEmailNotVerified(true);
+          setEmailVerificationSent(data.resendEmail || false);
+          setError(data.message || 'Please verify your email address before logging in.');
+        } else {
+          setError(data.error || 'Login failed');
+        }
       }
     } catch (err) {
       setError('An error occurred. Please try again.');
@@ -60,83 +51,99 @@ export default function Login() {
     }
   };
 
-  const handleOtpSubmit = async (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    resetMessages();
+    setError('');
     setLoading(true);
 
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      setLoading(false);
+      return;
+    }
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters');
+      setLoading(false);
+      return;
+    }
+
     try {
-      const res = await fetch('/api/auth/verify-otp', {
+      const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, otp })
+        body: JSON.stringify({ email, password })
       });
 
       const data = await res.json();
 
       if (res.ok) {
-        router.push('/dashboard');
+        setEmailVerificationSent(true);
+        setError('');
+        alert(data.message || 'Account created successfully! Please check your email to verify your account.');
+        setStep('login');
+        setPassword('');
+        setConfirmPassword('');
       } else {
-        setError(data.error || 'Invalid OTP');
+        setError(data.error || 'Failed to create account');
       }
     } catch (err) {
-      setError('Failed to verify OTP. Please try again.');
+      setError('An error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleForgotRequest = async (e: React.FormEvent) => {
+  const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    resetMessages();
+    setError('');
     setLoading(true);
 
     try {
       const res = await fetch('/api/auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: forgotEmail })
+        body: JSON.stringify({ email })
       });
 
-      await res.json();
+      const data = await res.json();
+
       if (res.ok) {
-        setInfoMessage('OTP sent to your email. Enter it with a new password.');
-        setForgotStage('verify');
+        alert(data.message || 'Password reset email sent. Please check your inbox.');
+        setShowForgotPassword(false);
+        setStep('login');
+        setError('');
       } else {
-        setError('Unable to send OTP. Please try again.');
+        setError(data.error || 'Failed to send reset email');
       }
-    } catch (error) {
-      setError('Failed to send reset OTP.');
+    } catch (err) {
+      setError('An error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleResetPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    resetMessages();
+  const handleResendVerification = async () => {
     setLoading(true);
+    setError('');
 
     try {
-      const res = await fetch('/api/auth/reset-password', {
+      const res = await fetch('/api/auth/resend-verification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: forgotEmail, otp: forgotOtp, newPassword })
+        body: JSON.stringify({ email })
       });
 
       const data = await res.json();
+
       if (res.ok) {
-        setInfoMessage('Password updated successfully. Please login.');
-        setStep('login');
-        setForgotStage('request');
-        setPassword('');
-        setForgotOtp('');
-        setNewPassword('');
+        setEmailVerificationSent(true);
+        alert(data.message || 'Verification email sent. Please check your inbox.');
       } else {
-        setError(data.error || 'Failed to reset password');
+        setError(data.error || 'Failed to resend verification email');
       }
-    } catch (error) {
-      setError('Failed to reset password.');
+    } catch (err) {
+      setError('An error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -308,7 +315,7 @@ export default function Login() {
             </div>
           </div>
           
-          {/* Jai Shree Shyam Text with Enhanced Styling */}
+          {/* Jai Shree Shyam Text */}
           <div style={{
             position: 'relative',
             marginBottom: '32px',
@@ -355,52 +362,100 @@ export default function Login() {
               <span>🕉️</span>
             </div>
           </div>
-          
-          <div style={{ marginTop: '32px' }}>
-            {infoMessage && (
-              <div className="alert alert-success" style={{ animation: 'slideIn 0.3s ease' }}>
-                {infoMessage}
-              </div>
-            )}
-            {error && (
-              <div className="alert alert-error" style={{ animation: 'slideIn 0.3s ease' }}>
-                {error}
-              </div>
-            )}
 
-            {step === 'login' && (
-              <form onSubmit={handleLoginSubmit}>
-                <div className="form-group">
-                  <label>Email</label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    placeholder="Enter your admin email"
-                    autoComplete="email"
-                    style={{ fontSize: '16px' }}
-                  />
-                </div>
+          {/* Email Verification Notice */}
+          {emailVerificationSent && (
+            <div className="alert" style={{ 
+              background: '#dbeafe', 
+              color: '#1e40af', 
+              marginBottom: '16px',
+              padding: '12px',
+              borderRadius: '8px',
+              fontSize: '14px',
+              margin: '0 20px 16px 20px',
+              border: '1px solid #93c5fd'
+            }}>
+              ✓ Verification email sent! Please check your inbox and click the verification link.
+            </div>
+          )}
 
-                <div className="form-group">
-                  <label>Password</label>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    placeholder="Enter your password"
-                    autoComplete="current-password"
-                    style={{ fontSize: '16px' }}
-                  />
-                </div>
-
+          {/* Email Not Verified Notice */}
+          {emailNotVerified && (
+            <div className="alert" style={{ 
+              background: '#fef3c7', 
+              color: '#92400e', 
+              marginBottom: '16px',
+              padding: '12px',
+              borderRadius: '8px',
+              fontSize: '14px',
+              margin: '0 20px 16px 20px',
+              border: '1px solid #fcd34d'
+            }}>
+              ⚠️ Email not verified. Please check your inbox and click the verification link.
+              {!emailVerificationSent && (
                 <button
-                  type="submit"
-                  className="btn btn-primary"
+                  onClick={handleResendVerification}
                   style={{
-                    width: '100%',
+                    display: 'block',
+                    marginTop: '8px',
+                    background: '#f59e0b',
+                    color: 'white',
+                    border: 'none',
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    fontWeight: 600
+                  }}
+                  disabled={loading}
+                >
+                  Resend Verification Email
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Login Form */}
+          {step === 'login' && !showForgotPassword && (
+            <form onSubmit={handleLogin} style={{ marginTop: '32px' }}>
+              {error && (
+                <div className="alert alert-error" style={{ animation: 'slideIn 0.3s ease', marginBottom: '16px', margin: '0 20px 16px 20px' }}>
+                  {error}
+                </div>
+              )}
+              
+              <div className="form-group" style={{ margin: '0 20px' }}>
+                <label>Email Address *</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  placeholder="Enter your email"
+                  autoComplete="email"
+                  style={{ fontSize: '16px' }}
+                />
+              </div>
+
+              <div className="form-group" style={{ margin: '16px 20px' }}>
+                <label>Password *</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  placeholder="Enter your password"
+                  autoComplete="current-password"
+                  style={{ fontSize: '16px' }}
+                />
+              </div>
+
+              <div style={{ margin: '0 20px' }}>
+                <button 
+                  type="submit" 
+                  className="btn btn-primary" 
+                  style={{ 
+                    width: '100%', 
                     marginTop: '8px',
                     padding: '14px',
                     fontSize: '16px',
@@ -408,173 +463,215 @@ export default function Login() {
                   }}
                   disabled={loading}
                 >
-                  {loading ? (
-                    <>
-                      <span className="spinner" style={{ marginRight: '8px' }} />
-                      Sending OTP...
-                    </>
-                  ) : (
-                    'Send OTP'
-                  )}
+                  {loading ? 'Logging in...' : 'Login'}
                 </button>
+              </div>
 
+              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '16px 20px 0 20px', flexWrap: 'wrap', gap: '8px' }}>
                 <button
                   type="button"
-                  className="btn btn-secondary"
-                  style={{ width: '100%', marginTop: '12px' }}
                   onClick={() => {
-                    setForgotEmail(email);
-                    setForgotStage('request');
-                    setStep('forgot');
-                    resetMessages();
+                    setShowForgotPassword(true);
+                    setError('');
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#6366f1',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    textDecoration: 'underline'
                   }}
                 >
                   Forgot Password?
                 </button>
-              </form>
-            )}
-
-            {step === 'otp' && (
-              <form onSubmit={handleOtpSubmit}>
-                <div className="form-group">
-                  <label>Enter OTP sent to {email}</label>
-                  <input
-                    type="text"
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value)}
-                    required
-                    placeholder="Enter 6-digit OTP"
-                    style={{ fontSize: '16px', letterSpacing: '4px', textAlign: 'center' }}
-                    maxLength={6}
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  style={{ width: '100%', marginTop: '8px', padding: '14px', fontSize: '16px', fontWeight: 700 }}
-                  disabled={loading}
-                >
-                  {loading ? 'Verifying...' : 'Verify & Login'}
-                </button>
-
                 <button
                   type="button"
-                  className="btn btn-secondary"
-                  style={{ width: '100%', marginTop: '12px' }}
                   onClick={() => {
-                    setStep('login');
-                    setOtp('');
-                    resetMessages();
+                    setStep('register');
+                    setError('');
+                    setEmailVerificationSent(false);
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#10b981',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    textDecoration: 'underline',
+                    fontWeight: 600
                   }}
                 >
-                  ← Back to Login
+                  Create Account
                 </button>
-              </form>
-            )}
+              </div>
+            </form>
+          )}
 
-            {step === 'forgot' && (
-              <>
-                {forgotStage === 'request' && (
-                  <form onSubmit={handleForgotRequest}>
-                    <div className="form-group">
-                      <label>Registered Email</label>
-                      <input
-                        type="email"
-                        value={forgotEmail}
-                        onChange={(e) => setForgotEmail(e.target.value)}
-                        required
-                        placeholder="Enter your admin email"
-                        style={{ fontSize: '16px' }}
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      className="btn btn-primary"
-                      style={{ width: '100%', padding: '14px', fontSize: '16px', fontWeight: 700 }}
-                      disabled={loading}
-                    >
-                      {loading ? 'Sending OTP...' : 'Send Reset OTP'}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      style={{ width: '100%', marginTop: '12px' }}
-                      onClick={() => {
-                        setStep('login');
-                        resetMessages();
-                      }}
-                    >
-                      ← Back to Login
-                    </button>
-                  </form>
-                )}
+          {/* Register Form */}
+          {step === 'register' && (
+            <form onSubmit={handleRegister} style={{ marginTop: '32px' }}>
+              {error && (
+                <div className="alert alert-error" style={{ animation: 'slideIn 0.3s ease', marginBottom: '16px', margin: '0 20px 16px 20px' }}>
+                  {error}
+                </div>
+              )}
+              
+              <div className="form-group" style={{ margin: '0 20px' }}>
+                <label>Email Address *</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  placeholder="Enter your email"
+                  autoComplete="email"
+                  style={{ fontSize: '16px' }}
+                />
+              </div>
 
-                {forgotStage === 'verify' && (
-                  <form onSubmit={handleResetPassword}>
-                    <div className="form-group">
-                      <label>OTP sent to {forgotEmail}</label>
-                      <input
-                        type="text"
-                        value={forgotOtp}
-                        onChange={(e) => setForgotOtp(e.target.value)}
-                        required
-                        placeholder="Enter OTP"
-                        style={{ fontSize: '16px', letterSpacing: '4px', textAlign: 'center' }}
-                        maxLength={6}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>New Password</label>
-                      <input
-                        type="password"
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        required
-                        placeholder="Enter new password"
-                        style={{ fontSize: '16px' }}
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      className="btn btn-primary"
-                      style={{ width: '100%', padding: '14px', fontSize: '16px', fontWeight: 700 }}
-                      disabled={loading}
-                    >
-                      {loading ? 'Updating...' : 'Reset Password'}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      style={{ width: '100%', marginTop: '12px' }}
-                      onClick={() => {
-                        setStep('login');
-                        setForgotStage('request');
-                        resetMessages();
-                      }}
-                    >
-                      ← Back to Login
-                    </button>
-                  </form>
-                )}
-              </>
-            )}
-          </div>
+              <div className="form-group" style={{ margin: '16px 20px' }}>
+                <label>Password * (Min 6 characters)</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  placeholder="Enter password (min 6 characters)"
+                  autoComplete="new-password"
+                  style={{ fontSize: '16px' }}
+                  minLength={6}
+                />
+              </div>
 
-          <p
-            style={{
-              marginTop: '24px',
-              textAlign: 'center',
-              color: '#64748b',
-              fontSize: '13px',
-              opacity: 0.8
-            }}
-          >
-            Default admin email: <strong style={{ color: '#6366f1' }}>admin@example.com</strong>
+              <div className="form-group" style={{ margin: '16px 20px' }}>
+                <label>Confirm Password *</label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  placeholder="Confirm password"
+                  autoComplete="new-password"
+                  style={{ fontSize: '16px' }}
+                  minLength={6}
+                />
+              </div>
+
+              <div style={{ margin: '0 20px' }}>
+                <button 
+                  type="submit" 
+                  className="btn btn-success" 
+                  style={{ 
+                    width: '100%', 
+                    marginTop: '8px',
+                    padding: '14px',
+                    fontSize: '16px',
+                    fontWeight: 700,
+                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+                  }}
+                  disabled={loading}
+                >
+                  {loading ? 'Creating Account...' : 'Create Account'}
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setStep('login');
+                  setError('');
+                  setEmailVerificationSent(false);
+                  setPassword('');
+                  setConfirmPassword('');
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#64748b',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  marginTop: '16px',
+                  marginBottom: '8px'
+                }}
+              >
+                ← Back to Login
+              </button>
+            </form>
+          )}
+
+          {/* Forgot Password Form */}
+          {showForgotPassword && (
+            <form onSubmit={handleForgotPassword} style={{ marginTop: '32px' }}>
+              {error && (
+                <div className="alert alert-error" style={{ animation: 'slideIn 0.3s ease', marginBottom: '16px', margin: '0 20px 16px 20px' }}>
+                  {error}
+                </div>
+              )}
+              
+              <div className="form-group" style={{ margin: '0 20px' }}>
+                <label>Email Address *</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  placeholder="Enter your email"
+                  autoComplete="email"
+                  style={{ fontSize: '16px' }}
+                />
+              </div>
+
+              <div style={{ margin: '0 20px' }}>
+                <button 
+                  type="submit" 
+                  className="btn btn-primary" 
+                  style={{ 
+                    width: '100%', 
+                    marginTop: '8px',
+                    padding: '14px',
+                    fontSize: '16px',
+                    fontWeight: 700
+                  }}
+                  disabled={loading}
+                >
+                  {loading ? 'Sending...' : 'Send Password Reset Link'}
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowForgotPassword(false);
+                  setError('');
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#64748b',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  marginTop: '16px',
+                  marginBottom: '8px'
+                }}
+              >
+                ← Back to Login
+              </button>
+            </form>
+          )}
+
+          <p style={{ 
+            marginTop: '24px', 
+            textAlign: 'center', 
+            color: '#64748b', 
+            fontSize: '13px',
+            opacity: 0.8,
+            marginBottom: '20px'
+          }}>
+            Secure login with email verification
           </p>
         </div>
       </div>
     </>
   );
 }
-
