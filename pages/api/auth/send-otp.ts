@@ -1,5 +1,4 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import db from '@/lib/db-firebase';
 import { auth } from '@/lib/firebase';
 import { sendPasswordResetEmail } from 'firebase/auth';
 
@@ -25,8 +24,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + 10); // OTP valid for 10 minutes
 
-    // Save OTP to Firestore
-    await db.saveOTP(email, otp, expiresAt);
+    // Note: OTP saving removed as we're using Firebase Auth email verification now
 
     // In production, send email via email service (SendGrid, Resend, etc.)
     // For now, we'll use Firebase Auth's email sending capability
