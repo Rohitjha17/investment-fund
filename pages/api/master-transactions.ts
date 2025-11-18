@@ -43,11 +43,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         })),
         ...(await Promise.all(returns.map(async (r: any) => {
           // Always fetch latest member details to ensure data is up-to-date
-          const memberId = parseInt(r.member_id) || r.member_id;
-          let member = await db.getMember(parseInt(memberId));
+          // Normalize member_id to number
+          let memberId: number;
+          if (typeof r.member_id === 'number') {
+            memberId = r.member_id;
+          } else if (typeof r.member_id === 'string') {
+            const parsed = parseInt(r.member_id);
+            memberId = isNaN(parsed) ? 0 : parsed;
+          } else {
+            memberId = parseInt(String(r.member_id)) || 0;
+          }
           
-          // If member not found with parsed ID, try with original ID
-          if (!member && memberId !== parseInt(memberId)) {
+          let member = null;
+          if (memberId > 0) {
             member = await db.getMember(memberId);
           }
           
@@ -118,24 +126,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Filter by member_id if provided
       let filteredTransactions = allTransactions;
       if (member_id) {
-        filteredTransactions = filteredTransactions.filter(t => t.member_id === parseInt(member_id as string));
+        const filterMemberId = typeof member_id === 'string' ? parseInt(member_id) : member_id;
+        filteredTransactions = filteredTransactions.filter((t: any) => {
+          const tMemberId = typeof t.member_id === 'number' ? t.member_id : parseInt(String(t.member_id)) || 0;
+          return tMemberId === filterMemberId;
+        });
       }
 
       // Filter by date range if provided
       if (start_date && end_date) {
-        const start = new Date(start_date as string);
-        const end = new Date(end_date as string);
-        // Set end date to end of day
-        end.setHours(23, 59, 59, 999);
-        
-        filteredTransactions = filteredTransactions.filter(t => {
-          const transactionDate = new Date(t.date);
-          return transactionDate >= start && transactionDate <= end;
-        });
+        try {
+          const start = new Date(start_date as string);
+          const end = new Date(end_date as string);
+          // Set end date to end of day
+          end.setHours(23, 59, 59, 999);
+          
+          if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+            filteredTransactions = filteredTransactions.filter((t: any) => {
+              if (!t.date) return false;
+              const transactionDate = new Date(t.date);
+              return !isNaN(transactionDate.getTime()) && transactionDate >= start && transactionDate <= end;
+            });
+          }
+        } catch (error) {
+          console.error('Error filtering by date:', error);
+        }
       }
 
       // Sort by date (newest first)
-      filteredTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      filteredTransactions.sort((a: any, b: any) => {
+        const dateA = a.date ? new Date(a.date).getTime() : 0;
+        const dateB = b.date ? new Date(b.date).getTime() : 0;
+        return dateB - dateA;
+      });
 
       return res.status(200).json(filteredTransactions);
     } catch (error) {
