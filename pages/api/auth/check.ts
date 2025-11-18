@@ -8,7 +8,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const token = req.cookies?.auth_token || req.headers.authorization?.replace('Bearer ', '');
+    const otpToken = req.cookies?.otp_auth_token;
 
+    // Check OTP auth token
+    if (otpToken) {
+      try {
+        const decoded = JSON.parse(Buffer.from(otpToken, 'base64').toString());
+        if (decoded.email && decoded.timestamp) {
+          // Check if token is not too old (24 hours)
+          const age = Date.now() - decoded.timestamp;
+          if (age < 24 * 60 * 60 * 1000) {
+            return res.status(200).json({ authenticated: true });
+          }
+        }
+      } catch {}
+    }
+
+    // Check Firebase auth token
     if (!token) {
       return res.status(200).json({ authenticated: false });
     }

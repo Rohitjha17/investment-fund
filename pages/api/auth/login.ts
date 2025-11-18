@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { auth } from '@/lib/firebase';
-import { signInWithEmailAndPassword, sendEmailVerification, sendSignInLinkToEmail, signOut } from 'firebase/auth';
+import { signInWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -8,20 +8,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { email, password, linkToken } = req.body;
-
-    if (linkToken) {
-      if (typeof linkToken !== 'string' || linkToken.length < 20) {
-        return res.status(400).json({ error: 'Invalid login token' });
-      }
-
-      res.setHeader('Set-Cookie', `auth_token=${linkToken}; HttpOnly; Path=/; SameSite=Strict`);
-      return res.status(200).json({
-        success: true,
-        authenticated: true,
-        linkLogin: true
-      });
-    }
+    const { email, password } = req.body;
 
     if (!email || !email.includes('@')) {
       return res.status(400).json({ error: 'Valid email is required' });
@@ -61,38 +48,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       }
 
-      // Send email sign-in link and sign the user out immediately
-      const protocol =
-        (req.headers['x-forwarded-proto'] as string)?.split(',')[0]?.trim() ||
-        (req.headers.referer?.startsWith('https') ? 'https' : 'http');
-      const host = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3000';
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`;
+      // Email is verified, get token and set session
+      const token = await user.getIdToken();
 
-      const actionCodeSettings = {
-        url: `${baseUrl}/verify-login?email=${encodeURIComponent(email)}`,
-        handleCodeInApp: true
-      };
-
-      try {
-        await sendSignInLinkToEmail(auth, email, actionCodeSettings);
-      } catch (linkError: any) {
-        if (linkError?.code === 'auth/operation-not-allowed') {
-          console.error('Email link sign-in is not enabled in Firebase project.');
-          return res.status(500).json({
-            error: 'Email link sign-in is disabled in Firebase Auth. Please enable "Email link (passwordless sign-in)" for the Email/Password provider.'
-          });
-        }
-        console.error('Error sending login link:', linkError);
-        return res.status(500).json({ error: 'Failed to send secure login link. Please try again later.' });
-      }
-
-      await signOut(auth);
+      // Set HTTP-only session cookie (expires when browser closes)
+      res.setHeader('Set-Cookie', `auth_token=${token}; HttpOnly; Path=/; SameSite=Strict`);
 
       return res.status(200).json({
         success: true,
-        authenticated: false,
-        linkSent: true,
-        message: 'Secure login link sent to your email. Please open it to finish signing in.'
+        authenticated: true,
+        user: {
+          email: user.email,
+          uid: user.uid,
+          emailVerified: user.emailVerified
+        }
       });
     } catch (error: any) {
       if (error.code === 'auth/user-not-found') {
