@@ -145,13 +145,24 @@ const dbMethods = {
   },
 
   async createMember(data: any) {
+    const isServer = typeof window === 'undefined';
     try {
+      if (isServer) {
+        console.log('🔧 [db-firebase] createMember called with:', { name: data.name, percentage: data.percentage_of_return });
+      }
+      
       // Initialize Firestore if needed
       await initializeFirestore();
+      if (isServer) {
+        console.log('✅ [db-firebase] Firestore initialized');
+      }
       
       // Get all members to calculate unique_number
       const membersSnapshot = await getDocs(collection(db, COLLECTIONS.members));
       const members = membersSnapshot.docs.map(d => d.data());
+      if (isServer) {
+        console.log(`📊 [db-firebase] Found ${members.length} existing members`);
+      }
       
       const maxUniqueNumber = members.length > 0
         ? Math.max(...members.map((m: any) => m.unique_number || 0))
@@ -164,7 +175,13 @@ const dbMethods = {
       const memberCode = `${data.name}-${sameNameCount + 1}`;
 
       // Get next ID using system document
+      if (isServer) {
+        console.log('🔢 [db-firebase] Getting next member ID...');
+      }
       const newId = await getNextId('members');
+      if (isServer) {
+        console.log(`✅ [db-firebase] Got next ID: ${newId}`);
+      }
 
       const member = {
         name: data.name,
@@ -181,10 +198,25 @@ const dbMethods = {
         updated_at: Timestamp.now()
       };
 
+      if (isServer) {
+        console.log(`💾 [db-firebase] Saving member to Firestore (ID: ${newId})...`);
+      }
       await setDoc(doc(db, COLLECTIONS.members, newId.toString()), member);
+      if (isServer) {
+        console.log(`✅ [db-firebase] Member saved successfully (ID: ${newId})`);
+      }
       return { id: newId, ...member };
-    } catch (error) {
-      console.error('Error creating member:', error);
+    } catch (error: any) {
+      if (isServer) {
+        console.error('❌ [db-firebase] Error creating member:', {
+          message: error?.message,
+          code: error?.code,
+          name: error?.name,
+          stack: error?.stack?.substring(0, 300)
+        });
+      } else {
+        console.error('❌ [db-firebase] Error creating member:', error?.message);
+      }
       throw error;
     }
   },
