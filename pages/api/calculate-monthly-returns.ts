@@ -42,11 +42,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Calculate returns for each member
     for (const memberData of allMembers) {
-      const member = await db.getMember(memberData.id);
+      const memberId = typeof memberData.id === 'number' ? memberData.id : parseInt(memberData.id);
+      const member = await db.getMember(memberId);
       if (!member) continue;
 
-      const deposits = member.deposits || [];
-      const withdrawals = member.withdrawals || [];
+      const deposits = (member as any).deposits || [];
+      const withdrawals = (member as any).withdrawals || [];
+      const percentage_of_return = (member as any).percentage_of_return || 0;
 
       // Skip if no deposits
       if (deposits.length === 0) continue;
@@ -56,15 +58,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         deposits.map((d: any) => ({
           amount: d.amount,
           date: d.deposit_date,
-          percentage: d.percentage !== null && d.percentage !== undefined
+            percentage: d.percentage !== null && d.percentage !== undefined
             ? d.percentage
-            : member.percentage_of_return
+            : percentage_of_return
         })),
         withdrawals.map((w: any) => ({
           amount: w.amount,
           date: w.withdrawal_date
         })),
-        member.percentage_of_return,
+        percentage_of_return,
         start,
         end
       );
@@ -76,7 +78,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         returnDate.setDate(2); // Always 2nd of current month
         
         await db.createReturn({
-          member_id: member.id,
+          member_id: typeof (member as any).id === 'number' ? (member as any).id : parseInt((member as any).id),
           return_amount: interest,
           return_date: returnDate.toISOString().split('T')[0],
           interest_days: 30,

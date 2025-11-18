@@ -2,7 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import db from '@/lib/db-firebase';
 import { calculateComplexInterest, getCurrentMonthWindow } from '@/lib/utils';
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -14,14 +14,15 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       return res.status(400).json({ error: 'Member ID is required' });
     }
 
-    const member = db.getMember(parseInt(member_id));
+    const member = await db.getMember(parseInt(member_id));
     if (!member) {
       return res.status(404).json({ error: 'Member not found' });
     }
 
     // Get all deposits and withdrawals for this member
-    const deposits = member.deposits || [];
-    const withdrawals = member.withdrawals || [];
+    const deposits = (member as any).deposits || [];
+    const withdrawals = (member as any).withdrawals || [];
+    const percentage_of_return = (member as any).percentage_of_return || 0;
 
     // Use provided dates OR default to current month (1-30)
     let startDate: Date;
@@ -44,13 +45,13 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         date: d.deposit_date,
         percentage: d.percentage !== null && d.percentage !== undefined 
           ? d.percentage 
-          : member.percentage_of_return
+          : percentage_of_return
       })),
       withdrawals.map((w: any) => ({
         amount: w.amount,
         date: w.withdrawal_date
       })),
-      member.percentage_of_return,
+      percentage_of_return,
       startDate,
       endDate
     );
@@ -62,7 +63,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       member_id: parseInt(member_id),
       interest: interest,
       principal: currentBalance,
-      percentage: member.percentage_of_return,
+      percentage: percentage_of_return,
       calculation_period: '30 days',
       start_date: startDate.toISOString(),
       end_date: endDate.toISOString()
