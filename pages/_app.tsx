@@ -1,15 +1,10 @@
 import '@/styles/globals.css';
 import type { AppProps } from 'next/app';
-import { useEffect } from 'react';
-import { initializeFirestore } from '@/lib/firestore-init';
 
 export default function App({ Component, pageProps }: AppProps) {
-  useEffect(() => {
-    // Initialize Firestore on app load
-    if (typeof window !== 'undefined') {
-      initializeFirestore().catch(console.error);
-    }
-  }, []);
+  // Removed client-side Firestore auto-initialization
+  // Initialization should happen server-side via API routes or after user authentication
+  // This prevents "Missing or insufficient permissions" errors on page load
 
   return <Component {...pageProps} />;
 }

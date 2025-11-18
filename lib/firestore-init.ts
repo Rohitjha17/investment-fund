@@ -170,8 +170,6 @@ export async function getNextId(collectionName: 'members' | 'deposits' | 'withdr
   }
 }
 
-// Auto-initialize on import (client-side only)
-if (typeof window !== 'undefined') {
-  initializeFirestore().catch(console.error);
-}
+// DO NOT auto-initialize - initialization should happen after user authentication
+// This prevents permission errors when accessing Firestore without auth
 

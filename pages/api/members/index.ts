@@ -1,15 +1,29 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import db from '@/lib/db-firebase';
+import { initializeFirestore } from '@/lib/firestore-init';
 
   // GET all members
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // Initialize Firestore server-side before operations
+  try {
+    await initializeFirestore();
+  } catch (error) {
+    console.error('Warning: Firestore initialization failed:', error);
+    // Continue anyway - might already be initialized
+  }
+
   if (req.method === 'GET') {
     try {
       const members = await db.getMembers();
       return res.status(200).json(members);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching members:', error);
-      return res.status(500).json({ error: 'Failed to fetch members' });
+      // Return more detailed error for debugging
+      return res.status(500).json({ 
+        error: 'Failed to fetch members',
+        details: error?.message || 'Unknown error',
+        code: error?.code || 'UNKNOWN'
+      });
     }
   }
 
@@ -57,9 +71,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       return res.status(201).json({ id: member.id, success: true });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating member:', error);
-      return res.status(500).json({ error: 'Failed to create member' });
+      return res.status(500).json({ 
+        error: 'Failed to create member',
+        details: error?.message || 'Unknown error',
+        code: error?.code || 'UNKNOWN'
+      });
     }
   }
 

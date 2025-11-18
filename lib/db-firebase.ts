@@ -2,10 +2,7 @@ import { db, Timestamp } from './firebase';
 import { collection, doc, getDoc, setDoc, deleteDoc, getDocs, query, where, orderBy, writeBatch } from 'firebase/firestore';
 import { COLLECTIONS, getNextId, initializeFirestore } from './firestore-init';
 
-// Auto-initialize Firestore on first import
-if (typeof window !== 'undefined') {
-  initializeFirestore().catch(console.error);
-}
+// DO NOT auto-initialize - initialization should happen server-side or after user authentication
 
 // Helper to convert Firestore timestamp to ISO string
 const toISO = (data: any) => {
