@@ -1,12 +1,11 @@
-import { adminDb } from './firebase-admin';
-import type {
-  Firestore,
-  CollectionReference,
-  DocumentReference,
-  Query,
-} from 'firebase-admin/firestore';
-import { Timestamp } from 'firebase-admin/firestore';
+import { db, Timestamp } from './firebase';
+import { collection, doc, getDoc, setDoc, deleteDoc, getDocs, query, where, orderBy, writeBatch } from 'firebase/firestore';
 import { COLLECTIONS, getNextId, initializeFirestore } from './firestore-init';
+
+// Auto-initialize Firestore on first import
+if (typeof window !== 'undefined') {
+  initializeFirestore().catch(console.error);
+}
 
 // Helper to convert Firestore timestamp to ISO string
 const toISO = (data: any) => {
@@ -21,50 +20,6 @@ const toTimestamp = (dateString: string) => {
   if (!dateString) return null;
   return Timestamp.fromDate(new Date(dateString));
 };
-
-const db: Firestore = adminDb as unknown as Firestore;
-
-const collection = (dbInstance: Firestore, path: string): CollectionReference =>
-  dbInstance.collection(path);
-
-const doc = (dbInstance: Firestore, path: string, id: string): DocumentReference =>
-  dbInstance.collection(path).doc(id);
-
-const getDoc = (docRef: DocumentReference) => docRef.get();
-const setDoc = (
-  docRef: DocumentReference,
-  data: FirebaseFirestore.DocumentData,
-  options?: FirebaseFirestore.SetOptions
-) => (options ? docRef.set(data, options) : docRef.set(data));
-const deleteDoc = (docRef: DocumentReference) => docRef.delete();
-
-const getDocs = (
-  queryRef: Query | CollectionReference
-): Promise<FirebaseFirestore.QuerySnapshot> => queryRef.get();
-
-const writeBatch = (dbInstance: Firestore) => dbInstance.batch();
-
-const query = (
-  collectionRef: CollectionReference,
-  ...constraints: Array<(query: Query) => Query>
-) => {
-  let q: Query = collectionRef;
-  constraints.forEach((constraint) => {
-    q = constraint(q);
-  });
-  return q;
-};
-
-const where = (
-  fieldPath: string,
-  opStr: FirebaseFirestore.WhereFilterOp,
-  value: any
-) => (query: Query) => query.where(fieldPath, opStr, value);
-
-const orderBy = (
-  fieldPath: string,
-  directionStr?: FirebaseFirestore.OrderByDirection
-) => (query: Query) => query.orderBy(fieldPath, directionStr);
 
 // Database methods using Firestore
 const dbMethods = {
@@ -129,7 +84,7 @@ const dbMethods = {
     try {
       const memberId = parseInt(id.toString());
       const memberDoc = await getDoc(doc(db, COLLECTIONS.members, memberId.toString()));
-      if (!memberDoc.exists) return null;
+      if (!memberDoc.exists()) return null;
 
       const member = { id: memberDoc.id, ...memberDoc.data() };
 
@@ -193,24 +148,13 @@ const dbMethods = {
   },
 
   async createMember(data: any) {
-    const isServer = typeof window === 'undefined';
     try {
-      if (isServer) {
-        console.log('🔧 [db-firebase] createMember called with:', { name: data.name, percentage: data.percentage_of_return });
-      }
-      
       // Initialize Firestore if needed
       await initializeFirestore();
-      if (isServer) {
-        console.log('✅ [db-firebase] Firestore initialized');
-      }
       
       // Get all members to calculate unique_number
       const membersSnapshot = await getDocs(collection(db, COLLECTIONS.members));
       const members = membersSnapshot.docs.map(d => d.data());
-      if (isServer) {
-        console.log(`📊 [db-firebase] Found ${members.length} existing members`);
-      }
       
       const maxUniqueNumber = members.length > 0
         ? Math.max(...members.map((m: any) => m.unique_number || 0))
@@ -223,13 +167,7 @@ const dbMethods = {
       const memberCode = `${data.name}-${sameNameCount + 1}`;
 
       // Get next ID using system document
-      if (isServer) {
-        console.log('🔢 [db-firebase] Getting next member ID...');
-      }
       const newId = await getNextId('members');
-      if (isServer) {
-        console.log(`✅ [db-firebase] Got next ID: ${newId}`);
-      }
 
       const member = {
         name: data.name,
@@ -246,25 +184,10 @@ const dbMethods = {
         updated_at: Timestamp.now()
       };
 
-      if (isServer) {
-        console.log(`💾 [db-firebase] Saving member to Firestore (ID: ${newId})...`);
-      }
       await setDoc(doc(db, COLLECTIONS.members, newId.toString()), member);
-      if (isServer) {
-        console.log(`✅ [db-firebase] Member saved successfully (ID: ${newId})`);
-      }
       return { id: newId, ...member };
-    } catch (error: any) {
-      if (isServer) {
-        console.error('❌ [db-firebase] Error creating member:', {
-          message: error?.message,
-          code: error?.code,
-          name: error?.name,
-          stack: error?.stack?.substring(0, 300)
-        });
-      } else {
-        console.error('❌ [db-firebase] Error creating member:', error?.message);
-      }
+    } catch (error) {
+      console.error('Error creating member:', error);
       throw error;
     }
   },
@@ -274,10 +197,9 @@ const dbMethods = {
       const memberRef = doc(db, COLLECTIONS.members, id.toString());
       const memberDoc = await getDoc(memberRef);
       
-      if (!memberDoc.exists) return false;
+      if (!memberDoc.exists()) return false;
 
       const existingMember = memberDoc.data();
-      if (!existingMember) return false;
       const existingUniqueNumber = existingMember.unique_number || id;
 
       let memberCode = existingMember.member_code || `${existingMember.name}-1`;
@@ -376,9 +298,8 @@ const dbMethods = {
   async getDeposit(id: number) {
     try {
       const depositDoc = await getDoc(doc(db, COLLECTIONS.deposits, id.toString()));
-      if (!depositDoc.exists) return null;
+      if (!depositDoc.exists()) return null;
       const data = depositDoc.data();
-      if (!data) return null;
       return {
         id: parseInt(depositDoc.id) || depositDoc.id,
         ...data,
@@ -418,12 +339,10 @@ const dbMethods = {
       const depositRef = doc(db, COLLECTIONS.deposits, id.toString());
       const depositDoc = await getDoc(depositRef);
       
-      if (!depositDoc.exists) return false;
-      const existingData = depositDoc.data();
-      if (!existingData) return false;
+      if (!depositDoc.exists()) return false;
 
       await setDoc(depositRef, {
-        ...existingData,
+        ...depositDoc.data(),
         member_id: parseInt(data.member_id),
         amount: parseFloat(data.amount),
         deposit_date: data.deposit_date,
@@ -481,9 +400,8 @@ const dbMethods = {
   async getWithdrawal(id: number) {
     try {
       const withdrawalDoc = await getDoc(doc(db, COLLECTIONS.withdrawals, id.toString()));
-      if (!withdrawalDoc.exists) return null;
+      if (!withdrawalDoc.exists()) return null;
       const data = withdrawalDoc.data();
-      if (!data) return null;
       return {
         id: parseInt(withdrawalDoc.id) || withdrawalDoc.id,
         ...data,
@@ -522,12 +440,10 @@ const dbMethods = {
       const withdrawalRef = doc(db, COLLECTIONS.withdrawals, id.toString());
       const withdrawalDoc = await getDoc(withdrawalRef);
       
-      if (!withdrawalDoc.exists) return false;
-      const existingWithdrawal = withdrawalDoc.data();
-      if (!existingWithdrawal) return false;
+      if (!withdrawalDoc.exists()) return false;
 
       await setDoc(withdrawalRef, {
-        ...existingWithdrawal,
+        ...withdrawalDoc.data(),
         member_id: parseInt(data.member_id),
         amount: parseFloat(data.amount),
         withdrawal_date: data.withdrawal_date,
@@ -607,7 +523,7 @@ const dbMethods = {
   async isMonthCalculated(monthKey: string): Promise<boolean> {
     try {
       const monthDoc = await getDoc(doc(db, COLLECTIONS.calculated_months, monthKey));
-      return monthDoc.exists;
+      return monthDoc.exists();
     } catch (error) {
       console.error('Error checking calculated month:', error);
       return false;

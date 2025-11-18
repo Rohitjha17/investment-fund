@@ -1,29 +1,5 @@
-import { adminDb } from './firebase-admin';
-import type {
-  Firestore,
-  CollectionReference,
-  DocumentReference,
-} from 'firebase-admin/firestore';
-import { Timestamp } from 'firebase-admin/firestore';
-
-const db: Firestore = adminDb as unknown as Firestore;
-
-const collection = (dbInstance: Firestore, path: string): CollectionReference =>
-  dbInstance.collection(path);
-
-const doc = (dbInstance: Firestore, path: string, id: string): DocumentReference =>
-  dbInstance.collection(path).doc(id);
-
-const getDoc = (docRef: DocumentReference) => docRef.get();
-const setDoc = (
-  docRef: DocumentReference,
-  data: FirebaseFirestore.DocumentData,
-  options?: FirebaseFirestore.SetOptions
-) => (options ? docRef.set(data, options) : docRef.set(data));
-
-const getDocs = (
-  collectionRef: CollectionReference
-): Promise<FirebaseFirestore.QuerySnapshot> => collectionRef.get();
+import { db, Timestamp } from './firebase';
+import { collection, doc, setDoc, getDoc, getDocs } from 'firebase/firestore';
 
 /**
  * Firestore Collection Structure and Initialization
@@ -119,39 +95,24 @@ export interface SystemDocument {
  */
 export async function initializeFirestore(): Promise<boolean> {
   try {
-    const isServer = typeof window === 'undefined';
-    if (isServer) {
-      console.log('🔧 [Server] Initializing Firestore database...');
-    }
+    console.log('Initializing Firestore database...');
 
     // Check if system document exists
     const systemDocRef = doc(db, COLLECTIONS.system, 'config');
-    
-    try {
-      const systemDoc = await getDoc(systemDocRef);
+    const systemDoc = await getDoc(systemDocRef);
 
-      if (!systemDoc.exists) {
-        // Initialize system config
-        await setDoc(systemDocRef, {
-          last_member_id: 0,
-          last_deposit_id: 0,
-          last_withdrawal_id: 0,
-          last_return_id: 0,
-          version: '1.0.0',
-          initialized_at: Timestamp.now(),
-          updated_at: Timestamp.now()
-        });
-        if (isServer) {
-          console.log('✅ [Server] System config initialized');
-        }
-      }
-    } catch (docError: any) {
-      // Handle permission errors gracefully
-      if (docError?.code === 'permission-denied') {
-        console.error('❌ [Server] Firestore permission denied - Check security rules!');
-        throw new Error('Firestore permission denied. Please check security rules in Firebase Console.');
-      }
-      throw docError;
+    if (!systemDoc.exists()) {
+      // Initialize system config
+      await setDoc(systemDocRef, {
+        last_member_id: 0,
+        last_deposit_id: 0,
+        last_withdrawal_id: 0,
+        last_return_id: 0,
+        version: '1.0.0',
+        initialized_at: Timestamp.now(),
+        updated_at: Timestamp.now()
+      });
+      console.log('✅ System config initialized');
     }
 
     // Initialize calculated_months collection (empty, documents added as needed)
@@ -160,24 +121,10 @@ export async function initializeFirestore(): Promise<boolean> {
     // Collections are created automatically when first document is added
     // No need to create empty collections
     
-    if (isServer) {
-      console.log('✅ [Server] Firestore initialization complete');
-    }
+    console.log('✅ Firestore initialization complete');
     return true;
-  } catch (error: any) {
-    const isServer = typeof window === 'undefined';
-    const errorMsg = error?.message || 'Unknown error';
-    const errorCode = error?.code || 'UNKNOWN';
-    
-    if (isServer) {
-      console.error('❌ [Server] Error initializing Firestore:', {
-        message: errorMsg,
-        code: errorCode,
-        stack: error?.stack?.substring(0, 200)
-      });
-    } else {
-      console.error('❌ [Client] Error initializing Firestore:', errorMsg);
-    }
+  } catch (error) {
+    console.error('❌ Error initializing Firestore:', error);
     return false;
   }
 }
@@ -190,7 +137,7 @@ export async function getNextId(collectionName: 'members' | 'deposits' | 'withdr
     const systemDocRef = doc(db, COLLECTIONS.system, 'config');
     const systemDoc = await getDoc(systemDocRef);
     
-    if (!systemDoc.exists) {
+    if (!systemDoc.exists()) {
       // Initialize if doesn't exist
       await initializeFirestore();
       return 1;
@@ -223,6 +170,8 @@ export async function getNextId(collectionName: 'members' | 'deposits' | 'withdr
   }
 }
 
-// DO NOT auto-initialize - initialization should happen after user authentication
-// This prevents permission errors when accessing Firestore without auth
+// Auto-initialize on import (client-side only)
+if (typeof window !== 'undefined') {
+  initializeFirestore().catch(console.error);
+}
 

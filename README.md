@@ -58,16 +58,6 @@ NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=G-XXXXXXXXXX
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
-For server-side Firebase Admin access (required for Vercel), also configure:
-
-```
-FIREBASE_ADMIN_PROJECT_ID=your-project-id
-FIREBASE_ADMIN_CLIENT_EMAIL=firebase-adminsdk-xxxx@your-project.iam.gserviceaccount.com
-FIREBASE_ADMIN_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIIEv...\n-----END PRIVATE KEY-----\n"
-```
-
-See `FIREBASE_ADMIN_SETUP.md` for detailed steps.
-
 ### 4. Initialize Firestore
 
 Run the development server:
