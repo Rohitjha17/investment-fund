@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { auth } from '@/lib/firebase';
-import { signInWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
+import { signInWithEmailAndPassword, sendSignInLinkToEmail, signOut } from 'firebase/auth';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -19,49 +19,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
-      // Sign in user
+      // Sign in user to verify credentials
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // Check if email is verified
+      // Check if email is verified (existing check remains)
       if (!user.emailVerified) {
-        // Reload user to get latest verification status
         await user.reload();
-
-        // If still not verified, send verification email again
         if (!user.emailVerified) {
-          try {
-            await sendEmailVerification(user, {
-              url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/login`,
-              handleCodeInApp: false,
-            });
-          } catch (verifyError) {
-            console.error('Error sending verification email:', verifyError);
-          }
-
           return res.status(403).json({
-            error: 'Please verify your email address before logging in.',
+            error: 'Please verify your email address first.',
             emailVerified: false,
-            message: 'A verification email has been sent. Please check your inbox and click the verification link.',
+            message: 'Please verify your email before logging in.',
             resendEmail: true
           });
         }
       }
 
-      // Email is verified, get token and set session
-      const token = await user.getIdToken();
+      // ✅ NEW: Send sign-in link to email
+      const actionCodeSettings = {
+        url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://your-production-domain.vercel.app'}/verify-login`,
+        handleCodeInApp: true,
+      };
 
-      // Set HTTP-only session cookie (expires when browser closes)
-      res.setHeader('Set-Cookie', `auth_token=${token}; HttpOnly; Path=/; SameSite=Strict`);
+      await sendSignInLinkToEmail(auth, email, actionCodeSettings);
 
+      // ✅ NEW: Sign out immediately after sending link
+      await signOut(auth);
+
+      // ✅ NEW: Return response indicating email link was sent
       return res.status(200).json({
         success: true,
-        authenticated: true,
-        user: {
-          email: user.email,
-          uid: user.uid,
-          emailVerified: user.emailVerified
-        }
+        authenticated: false,
+        emailLinkSent: true,
+        message: 'Login link sent to your email. Please check your inbox and click the link to complete login.',
+        email: email
       });
     } catch (error: any) {
       if (error.code === 'auth/user-not-found') {

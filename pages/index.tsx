@@ -15,11 +15,6 @@ export default function Login() {
   const [emailVerificationSent, setEmailVerificationSent] = useState(false);
   const [emailNotVerified, setEmailNotVerified] = useState(false);
 
-  // OTP Login states
-  const [useOTPLogin, setUseOTPLogin] = useState(false);
-  const [otp, setOtp] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
-
   // No auto-login check - user must login every time website opens
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -37,6 +32,17 @@ export default function Login() {
       });
 
       const data = await res.json();
+
+      // ✅ NEW: Handle email link sent response
+      if (res.ok && data.emailLinkSent) {
+        // Store email in localStorage for verification page
+        window.localStorage.setItem('emailForSignIn', email);
+        
+        alert(data.message || 'Login link sent to your email. Please check your inbox and click the link to complete login.');
+        setEmail('');
+        setPassword('');
+        return;
+      }
 
       if (res.ok && data.authenticated) {
         router.push('/dashboard');
@@ -146,64 +152,6 @@ export default function Login() {
         alert(data.message || 'Verification email sent. Please check your inbox.');
       } else {
         setError(data.error || 'Failed to resend verification email');
-      }
-    } catch (err) {
-      setError('An error occurred. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // OTP Login handlers
-  const handleSendOTP = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-
-    try {
-      const res = await fetch('/api/auth/otp-send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
-      });
-
-      const data = await res.json();
-
-      if (res.ok) {
-        setOtpSent(true);
-        alert(data.message || 'OTP sent to your email');
-        // In development, show OTP
-        if (data.otp) {
-          console.log('Development OTP:', data.otp);
-        }
-      } else {
-        setError(data.error || 'Failed to send OTP');
-      }
-    } catch (err) {
-      setError('An error occurred. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyOTP = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-
-    try {
-      const res = await fetch('/api/auth/otp-verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, otp })
-      });
-
-      const data = await res.json();
-
-      if (res.ok && data.authenticated) {
-        router.push('/dashboard');
-      } else {
-        setError(data.error || 'Invalid OTP');
       }
     } catch (err) {
       setError('An error occurred. Please try again.');
@@ -568,196 +516,7 @@ export default function Login() {
                   Create Account
                 </button>
               </div>
-
-              {/* OTP Login Option */}
-              <div style={{ margin: '24px 20px 0', textAlign: 'center' }}>
-                <div style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '16px',
-                  marginBottom: '16px'
-                }}>
-                  <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }} />
-                  <span style={{ color: '#64748b', fontSize: '13px', fontWeight: 500 }}>OR</span>
-                  <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }} />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setUseOTPLogin(true);
-                    setError('');
-                    setOtpSent(false);
-                    setOtp('');
-                  }}
-                  style={{
-                    background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
-                    border: 'none',
-                    color: 'white',
-                    padding: '12px 24px',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    boxShadow: '0 2px 8px rgba(139, 92, 246, 0.3)',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseOver={(e) => {
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(139, 92, 246, 0.4)';
-                  }}
-                  onMouseOut={(e) => {
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(139, 92, 246, 0.3)';
-                  }}
-                >
-                  🔐 Login with OTP
-                </button>
-              </div>
             </form>
-          )}
-
-          {/* OTP Login Form */}
-          {step === 'login' && !showForgotPassword && useOTPLogin && (
-            <div style={{ marginTop: '24px', padding: '0 20px' }}>
-              <div style={{
-                background: 'linear-gradient(135deg, #ede9fe 0%, #f3e8ff 100%)',
-                padding: '20px',
-                borderRadius: '12px',
-                border: '2px solid #8b5cf6',
-                marginBottom: '16px'
-              }}>
-                <h3 style={{ 
-                  margin: '0 0 16px', 
-                  fontSize: '18px', 
-                  fontWeight: 700,
-                  color: '#7c3aed',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}>
-                  <span>🔐</span> Login with OTP
-                </h3>
-
-                {error && (
-                  <div className="alert alert-error" style={{ animation: 'slideIn 0.3s ease', marginBottom: '16px' }}>
-                    {error}
-                  </div>
-                )}
-
-                {!otpSent ? (
-                  <form onSubmit={handleSendOTP}>
-                    <div className="form-group">
-                      <label>Email Address *</label>
-                      <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        required
-                        placeholder="Enter your email"
-                        autoComplete="email"
-                        style={{ fontSize: '16px' }}
-                      />
-                    </div>
-                    <button 
-                      type="submit" 
-                      className="btn"
-                      style={{ 
-                        width: '100%', 
-                        marginTop: '12px',
-                        background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
-                        color: 'white',
-                        border: 'none',
-                        fontWeight: 700
-                      }}
-                      disabled={loading}
-                    >
-                      {loading ? 'Sending OTP...' : 'Send OTP'}
-                    </button>
-                  </form>
-                ) : (
-                  <form onSubmit={handleVerifyOTP}>
-                    <div className="form-group">
-                      <label>Enter 6-Digit OTP *</label>
-                      <input
-                        type="text"
-                        value={otp}
-                        onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                        required
-                        placeholder="Enter OTP"
-                        maxLength={6}
-                        style={{ 
-                          fontSize: '24px', 
-                          letterSpacing: '8px',
-                          textAlign: 'center',
-                          fontWeight: 700
-                        }}
-                      />
-                    </div>
-                    <p style={{ fontSize: '12px', color: '#64748b', margin: '8px 0' }}>
-                      OTP valid for 2 minutes. Check your email.
-                    </p>
-                    <button 
-                      type="submit" 
-                      className="btn"
-                      style={{ 
-                        width: '100%', 
-                        marginTop: '12px',
-                        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                        color: 'white',
-                        border: 'none',
-                        fontWeight: 700
-                      }}
-                      disabled={loading || otp.length !== 6}
-                    >
-                      {loading ? 'Verifying...' : 'Verify OTP'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setOtpSent(false);
-                        setOtp('');
-                        setError('');
-                      }}
-                      style={{
-                        width: '100%',
-                        marginTop: '8px',
-                        background: 'none',
-                        border: '1px solid #cbd5e1',
-                        color: '#64748b',
-                        padding: '10px',
-                        borderRadius: '8px',
-                        cursor: 'pointer',
-                        fontSize: '14px'
-                      }}
-                    >
-                      Resend OTP
-                    </button>
-                  </form>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setUseOTPLogin(false);
-                    setOtpSent(false);
-                    setOtp('');
-                    setError('');
-                  }}
-                  style={{
-                    width: '100%',
-                    marginTop: '16px',
-                    background: 'none',
-                    border: 'none',
-                    color: '#7c3aed',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    textDecoration: 'underline'
-                  }}
-                >
-                  ← Back to Password Login
-                </button>
-              </div>
-            </div>
           )}
 
           {/* Register Form */}
