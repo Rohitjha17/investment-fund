@@ -51,7 +51,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Skip if no deposits
       if (deposits.length === 0) continue;
 
-      // Calculate interest for previous month (1-30 day window)
+      // Calculate interest for previous month (full month window)
       const defaultPercentage = (member as any).percentage_of_return || 0;
       
       const interest = calculateComplexInterest(
@@ -81,8 +81,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           member_id: member.id,
           return_amount: interest,
           return_date: returnDate.toISOString().split('T')[0],
-          interest_days: 30,
-          notes: `Automatic return for ${month} (1-30 day cycle)`
+          interest_days: Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1,
+          notes: `Automatic return for ${month} (full month cycle)`
         });
 
         calculatedCount++;

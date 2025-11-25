@@ -44,6 +44,11 @@ export default function MasterSheet() {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
+  const [filters, setFilters] = useState({
+    showDeposits: true,
+    showWithdrawals: true,
+    showReturns: true
+  });
 
   useEffect(() => {
     checkAuth();
@@ -198,7 +203,9 @@ export default function MasterSheet() {
     try {
       const res = await fetch('/api/members');
       const data = await res.json();
-      setMembers(data);
+      // Sort members alphabetically by name
+      const sortedMembers = data.sort((a: any, b: any) => a.name.localeCompare(b.name));
+      setMembers(sortedMembers);
     } catch (error) {
       console.error('Error fetching members:', error);
     }
@@ -443,6 +450,44 @@ export default function MasterSheet() {
           )}
         </div>
 
+        {/* Transaction Type Filters */}
+        <div className="card" style={{ marginBottom: '24px' }}>
+          <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 700, color: '#1e293b' }}>🔍 Transaction Filters</h3>
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+            gap: '12px'
+          }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '8px 12px', borderRadius: '8px', background: filters.showDeposits ? '#f0fdf4' : '#f8fafc', border: '1px solid', borderColor: filters.showDeposits ? '#22c55e' : '#e2e8f0' }}>
+              <input
+                type="checkbox"
+                checked={filters.showDeposits}
+                onChange={(e) => setFilters({...filters, showDeposits: e.target.checked})}
+                style={{ accentColor: '#22c55e' }}
+              />
+              <span style={{ fontWeight: 600, color: filters.showDeposits ? '#166534' : '#64748b' }}>💰 Deposits</span>
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '8px 12px', borderRadius: '8px', background: filters.showWithdrawals ? '#fef2f2' : '#f8fafc', border: '1px solid', borderColor: filters.showWithdrawals ? '#ef4444' : '#e2e8f0' }}>
+              <input
+                type="checkbox"
+                checked={filters.showWithdrawals}
+                onChange={(e) => setFilters({...filters, showWithdrawals: e.target.checked})}
+                style={{ accentColor: '#ef4444' }}
+              />
+              <span style={{ fontWeight: 600, color: filters.showWithdrawals ? '#dc2626' : '#64748b' }}>💸 Withdrawals</span>
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '8px 12px', borderRadius: '8px', background: filters.showReturns ? '#f0f9ff' : '#f8fafc', border: '1px solid', borderColor: filters.showReturns ? '#3b82f6' : '#e2e8f0' }}>
+              <input
+                type="checkbox"
+                checked={filters.showReturns}
+                onChange={(e) => setFilters({...filters, showReturns: e.target.checked})}
+                style={{ accentColor: '#3b82f6' }}
+              />
+              <span style={{ fontWeight: 600, color: filters.showReturns ? '#1d4ed8' : '#64748b' }}>📈 Returns</span>
+            </label>
+          </div>
+        </div>
+
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '16px' }}>
             <div>
@@ -487,7 +532,19 @@ export default function MasterSheet() {
                 </tr>
               </thead>
               <tbody>
-                {transactions.length === 0 ? (
+                {(() => {
+                  // Filter transactions based on selected filters
+                  const filteredTransactions = transactions.filter(transaction => {
+                    if (transaction.transaction_type === 'deposit' && !filters.showDeposits) return false;
+                    if (transaction.transaction_type === 'withdrawal' && !filters.showWithdrawals) return false;
+                    if (transaction.transaction_type === 'return' && !filters.showReturns) return false;
+                    return true;
+                  });
+                  
+                  // Sort alphabetically by member name
+                  const sortedTransactions = filteredTransactions.sort((a, b) => a.member_name.localeCompare(b.member_name));
+                  
+                  return sortedTransactions.length === 0 ? (
                   <tr>
                     <td colSpan={7} style={{ textAlign: 'center', padding: '60px 20px' }}>
                       <div style={{ fontSize: '48px', marginBottom: '16px' }}>📋</div>
@@ -497,7 +554,7 @@ export default function MasterSheet() {
                     </td>
                   </tr>
                 ) : (
-                  transactions.map((transaction) => {
+                    sortedTransactions.map((transaction) => {
                     // Calculate total deposits
                     const totalDeposits = (transaction as any).deposits && (transaction as any).deposits.length > 0
                       ? (transaction as any).deposits.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0)
@@ -608,7 +665,8 @@ export default function MasterSheet() {
                       </tr>
                     );
                   })
-                )}
+                );
+                })()}
               </tbody>
             </table>
           </div>

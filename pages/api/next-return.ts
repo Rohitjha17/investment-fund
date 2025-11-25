@@ -19,7 +19,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(404).json({ error: 'Member not found' });
     }
 
-    // Use next month window (1-30)
+    // Use next month window (full month)
     const window = getNextMonthWindow();
     const startDate = window.start;
     const endDate = window.end;
@@ -55,7 +55,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       next_return_amount: interest,
       principal: currentBalance,
       percentage: defaultPercentage,
-      period: 'Next Month (1-30)',
+      period: 'Next Month (Full Month)',
       start_date: startDate.toISOString(),
       end_date: endDate.toISOString()
     });

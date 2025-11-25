@@ -4,7 +4,7 @@ import { calculateComplexInterest, getCurrentMonthWindow, isSecondOfMonth } from
 
 /**
  * Calculate current returns for a member
- * - If deposit date is in current month: Calculate from deposit date+1 to 30th of current month
+ * - If deposit date is in current month: Calculate from deposit date+1 to last day of current month
  * - If past 2nd of month: Returns are already stored, return from database
  * - If before 2nd: Calculate what will be the return for current month cycle
  */
@@ -42,7 +42,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const currentDate = today.getDate();
     const isPastSecond = currentDate >= 2;
 
-    // Get current month window (1-30)
+    // Get current month window (1 to last day)
     const currentWindow = getCurrentMonthWindow();
 
     // Check if any deposit is in current month
@@ -94,7 +94,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       periodType = 'current_month_first_deposit';
       periodInfo = `${formatDate(startDate)} to 30th of ${today.toLocaleString('en-IN', { month: 'long', year: 'numeric' })}`;
     } else {
-      // No deposits in current month - use full month window (1-30)
+      // No deposits in current month - use full month window
       if (isPastSecond) {
         // Already past 2nd - return should be in database
         const currentMonthReturns = member.returns.filter((r: any) => {
@@ -110,7 +110,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           periodType = 'stored_return';
           periodInfo = `Stored return for ${today.toLocaleString('en-IN', { month: 'long', year: 'numeric' })}`;
         } else {
-          // Calculate for current month (1-30)
+          // Calculate for current month (full month)
           returnAmount = calculateComplexInterest(
             deposits.map((d: any) => ({
               amount: d.amount,
@@ -127,9 +127,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             currentWindow.start,
             currentWindow.end
           );
-          interestDays = 30;
+          const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+          interestDays = lastDay;
           periodType = 'current_month_full';
-          periodInfo = `1st to 30th of ${today.toLocaleString('en-IN', { month: 'long', year: 'numeric' })}`;
+          periodInfo = `1st to ${lastDay}th of ${today.toLocaleString('en-IN', { month: 'long', year: 'numeric' })}`;
         }
       } else {
         // Before 2nd - calculate what will be the return
@@ -185,7 +186,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const firstDepositDate = new Date(firstDepositInMonth.deposit_date);
       startDate = new Date(firstDepositDate);
       startDate.setDate(startDate.getDate() + 1);
-      endDate = new Date(today.getFullYear(), today.getMonth(), 30, 23, 59, 59, 999);
+      const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+      endDate = new Date(today.getFullYear(), today.getMonth(), lastDay, 23, 59, 59, 999);
     } else {
       startDate = currentWindow.start;
       endDate = currentWindow.end;

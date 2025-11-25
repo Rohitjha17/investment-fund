@@ -7,32 +7,38 @@ function calculateInterestSimple(
   return (principal * percentage * days) / (100 * 30);
 }
 
-// Get current month start (day 1) and end (day 30)
+// Get current month start (day 1) and end (last day of month)
 export function getCurrentMonthWindow(): { start: Date; end: Date } {
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  // Set end date to end of day 30 (23:59:59) to include the full day
-  const end = new Date(now.getFullYear(), now.getMonth(), 30, 23, 59, 59, 999);
+  // Get last day of current month
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  // Set end date to end of last day (23:59:59) to include the full day
+  const end = new Date(now.getFullYear(), now.getMonth(), lastDay, 23, 59, 59, 999);
   return { start, end };
 }
 
-// Get next month window (day 1-30)
+// Get next month window (day 1 to last day of next month)
 export function getNextMonthWindow(): { start: Date; end: Date } {
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  // Set end date to end of day 30 (23:59:59) to include the full day
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 30, 23, 59, 59, 999);
+  // Get last day of next month
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 2, 0).getDate();
+  // Set end date to end of last day (23:59:59) to include the full day
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, lastDay, 23, 59, 59, 999);
   return { start, end };
 }
 
-// Get previous month window (day 1-30)
+// Get previous month window (day 1 to last day of previous month)
 export function getPreviousMonthWindow(): { start: Date; end: Date; month: string } {
   const now = new Date();
   const year = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
   const month = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
   const start = new Date(year, month, 1);
-  // Set end date to end of day 30 (23:59:59) to include the full day
-  const end = new Date(year, month, 30, 23, 59, 59, 999);
+  // Get last day of previous month
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  // Set end date to end of last day (23:59:59) to include the full day
+  const end = new Date(year, month, lastDay, 23, 59, 59, 999);
   const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`; // Format: YYYY-MM
   return { start, end, month: monthKey };
 }
@@ -45,7 +51,7 @@ export function isSecondOfMonth(): boolean {
 
 // Complex interest calculation with multiple deposits/withdrawals and different rates
 // Each deposit maintains its own percentage rate
-// ALWAYS clamps to provided window (1-30 day cycle)
+// ALWAYS clamps to provided window (full month cycle)
 export function calculateComplexInterest(
   deposits: Array<{ amount: number; date: string; percentage?: number }>,
   withdrawals: Array<{ amount: number; date: string }>,

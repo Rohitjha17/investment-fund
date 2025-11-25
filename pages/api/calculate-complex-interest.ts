@@ -23,7 +23,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const deposits = member.deposits || [];
     const withdrawals = member.withdrawals || [];
 
-    // Use provided dates OR default to current month (1-30)
+    // Use provided dates OR default to current month (full month)
     let startDate: Date;
     let endDate: Date;
 
@@ -31,7 +31,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       startDate = new Date(start_date);
       endDate = new Date(end_date);
     } else {
-      // Default to current month window (1-30)
+      // Default to current month window (full month)
       const window = getCurrentMonthWindow();
       startDate = window.start;
       endDate = window.end;

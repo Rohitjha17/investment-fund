@@ -33,7 +33,14 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
+  const [filters, setFilters] = useState({
+    showDeposits: true,
+    showReturns: true,
+    showReferrals: true,
+    showWithdrawals: true
+  });
   const [currentReturns, setCurrentReturns] = useState<Record<number, number>>({});
+  const [referralIncomes, setReferralIncomes] = useState<Record<number, number>>({});
   const [formData, setFormData] = useState({
     name: '',
     alias_name: '',
@@ -52,6 +59,12 @@ export default function Dashboard() {
     checkAndCalculateMonthlyReturns();
     fetchMembers();
   }, []);
+
+  useEffect(() => {
+    // Sort members alphabetically by name
+    const sortedMembers = [...members].sort((a, b) => a.name.localeCompare(b.name));
+    setFilteredMembers(sortedMembers);
+  }, [members]);
 
   const checkAndCalculateMonthlyReturns = async () => {
     try {
@@ -86,10 +99,13 @@ export default function Dashboard() {
       setMembers(data);
       setFilteredMembers(data);
       
-      // Fetch current returns for each member
+      // Fetch current returns and referral incomes for each member
       const returnsMap: Record<number, number> = {};
+      const referralMap: Record<number, number> = {};
+      
       await Promise.all(data.map(async (member: Member) => {
         try {
+          // Fetch current returns
           const returnsRes = await fetch('/api/member/current-returns', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -99,11 +115,23 @@ export default function Dashboard() {
           if (returnsRes.ok) {
             returnsMap[member.id] = returnsData.current_return || 0;
           }
+
+          // Fetch referral income
+          const referralRes = await fetch('/api/referral-income', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ member_id: member.id })
+          });
+          const referralData = await referralRes.json();
+          if (referralRes.ok) {
+            referralMap[member.id] = referralData.total_referral_income || 0;
+          }
         } catch (error) {
-          console.error(`Error fetching returns for member ${member.id}:`, error);
+          console.error(`Error fetching data for member ${member.id}:`, error);
         }
       }));
       setCurrentReturns(returnsMap);
+      setReferralIncomes(referralMap);
     } catch (error) {
       console.error('Error fetching members:', error);
     } finally {
@@ -114,17 +142,23 @@ export default function Dashboard() {
   const handleSearch = async (query: string) => {
     setSearchQuery(query);
     if (!query.trim()) {
-      setFilteredMembers(members);
+      // Sort alphabetically when no search query
+      const sortedMembers = [...members].sort((a, b) => a.name.localeCompare(b.name));
+      setFilteredMembers(sortedMembers);
       return;
     }
     
     try {
       const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
       const data = await res.json();
-      setFilteredMembers(data);
+      // Sort search results alphabetically
+      const sortedData = data.sort((a: Member, b: Member) => a.name.localeCompare(b.name));
+      setFilteredMembers(sortedData);
     } catch (error) {
       console.error('Error searching:', error);
-      setFilteredMembers(members);
+      // Sort alphabetically on error fallback
+      const sortedMembers = [...members].sort((a, b) => a.name.localeCompare(b.name));
+      setFilteredMembers(sortedMembers);
     }
   };
 
@@ -417,6 +451,45 @@ export default function Dashboard() {
           />
         </div>
 
+        {/* Filters Section */}
+        <div className="card">
+          <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 700, color: '#1e293b' }}>📊 Display Filters</h3>
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+            gap: '12px',
+            marginBottom: '8px'
+          }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '8px 12px', borderRadius: '8px', background: filters.showDeposits ? '#f0fdf4' : '#f8fafc', border: '1px solid', borderColor: filters.showDeposits ? '#22c55e' : '#e2e8f0' }}>
+              <input
+                type="checkbox"
+                checked={filters.showDeposits}
+                onChange={(e) => setFilters({...filters, showDeposits: e.target.checked})}
+                style={{ accentColor: '#22c55e' }}
+              />
+              <span style={{ fontWeight: 600, color: filters.showDeposits ? '#166534' : '#64748b' }}>💰 Total Deposits</span>
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '8px 12px', borderRadius: '8px', background: filters.showReturns ? '#f0f9ff' : '#f8fafc', border: '1px solid', borderColor: filters.showReturns ? '#3b82f6' : '#e2e8f0' }}>
+              <input
+                type="checkbox"
+                checked={filters.showReturns}
+                onChange={(e) => setFilters({...filters, showReturns: e.target.checked})}
+                style={{ accentColor: '#3b82f6' }}
+              />
+              <span style={{ fontWeight: 600, color: filters.showReturns ? '#1d4ed8' : '#64748b' }}>📈 Current Returns</span>
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '8px 12px', borderRadius: '8px', background: filters.showReferrals ? '#fdf4ff' : '#f8fafc', border: '1px solid', borderColor: filters.showReferrals ? '#a855f7' : '#e2e8f0' }}>
+              <input
+                type="checkbox"
+                checked={filters.showReferrals}
+                onChange={(e) => setFilters({...filters, showReferrals: e.target.checked})}
+                style={{ accentColor: '#a855f7' }}
+              />
+              <span style={{ fontWeight: 600, color: filters.showReferrals ? '#7c3aed' : '#64748b' }}>🤝 Referral Commission</span>
+            </label>
+          </div>
+        </div>
+
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
             <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 700 }}>Members List</h2>
@@ -440,17 +513,18 @@ export default function Dashboard() {
                   <th>Name</th>
                   <th>Alias</th>
                   <th>Village - Town</th>
-                  <th>Total Deposits</th>
-                  <th>Current Month Return</th>
+                  {filters.showDeposits && <th>Total Deposits</th>}
+                  {filters.showReturns && <th>Current Month Return</th>}
+                  {filters.showReferrals && <th>Referral Commission</th>}
                   <th>Default Return %</th>
-                  <th>Referral</th>
+                  <th>Referral Person</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredMembers.length === 0 ? (
                   <tr>
-                    <td colSpan={8} style={{ textAlign: 'center', padding: '60px 20px' }}>
+                    <td colSpan={10} style={{ textAlign: 'center', padding: '60px 20px' }}>
                       <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔍</div>
                       <p style={{ fontSize: '16px', color: '#64748b', fontWeight: 500 }}>
                         {searchQuery ? 'No members found matching your search.' : 'No members found. Click "Add Member" to add one.'}
@@ -479,12 +553,21 @@ export default function Dashboard() {
                           ? `${member.village} - ${member.town}`
                           : member.village || member.town || <span style={{ color: '#94a3b8' }}>-</span>}
                       </td>
-                      <td style={{ fontWeight: 700, color: '#10b981', fontSize: '16px' }}>
-                        {formatCurrency(member.total_deposits)}
-                      </td>
-                      <td style={{ fontWeight: 700, color: '#8b5cf6', fontSize: '16px' }}>
-                        {formatCurrency(currentReturns[member.id] || 0)}
-                      </td>
+                      {filters.showDeposits && (
+                        <td style={{ fontWeight: 700, color: '#10b981', fontSize: '16px' }}>
+                          {formatCurrency(member.total_deposits)}
+                        </td>
+                      )}
+                      {filters.showReturns && (
+                        <td style={{ fontWeight: 700, color: '#8b5cf6', fontSize: '16px' }}>
+                          {formatCurrency(currentReturns[member.id] || 0)}
+                        </td>
+                      )}
+                      {filters.showReferrals && (
+                        <td style={{ fontWeight: 700, color: '#f59e0b', fontSize: '16px' }}>
+                          {formatCurrency(referralIncomes[member.id] || 0)}
+                        </td>
+                      )}
                       <td>
                         <span style={{
                           background: '#f0fdf4',
@@ -499,8 +582,27 @@ export default function Dashboard() {
                       </td>
                       <td>
                         {member.referral_name 
-                          ? <span style={{ fontSize: '14px' }}>{member.referral_name} <span style={{ color: '#64748b' }}>({member.referral_percent}%)</span></span>
+                          ? <button
+                              onClick={() => router.push(`/referral-profile/${encodeURIComponent(member.referral_name || '')}`)}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: '#3b82f6',
+                                textDecoration: 'underline',
+                                cursor: 'pointer',
+                                fontSize: '14px',
+                                fontWeight: 600
+                              }}
+                              title="View referral profile"
+                            >
+                              {member.referral_name}
+                            </button>
                           : <span style={{ color: '#94a3b8' }}>-</span>}
+                        {member.referral_name && (
+                          <span style={{ color: '#64748b', fontSize: '12px', marginLeft: '4px' }}>
+                            ({member.referral_percent}%)
+                          </span>
+                        )}
                       </td>
                       <td>
                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
