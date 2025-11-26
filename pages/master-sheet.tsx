@@ -44,10 +44,14 @@ export default function MasterSheet() {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
-  const [filters, setFilters] = useState({
-    showDeposits: true,
-    showWithdrawals: true,
-    showReturns: true
+  const [columnFilters, setColumnFilters] = useState({
+    paymentDate: false,
+    memberDetails: false,
+    location: false,
+    totalDeposits: false,
+    returnRate: false,
+    returnAmount: false,
+    notes: false
   });
 
   useEffect(() => {
@@ -172,7 +176,14 @@ export default function MasterSheet() {
         }
       }
       
-      setTransactions(filteredData);
+      // Sort transactions alphabetically by member name
+      const sortedData = filteredData.sort((a: any, b: any) => {
+        const nameA = (a.member_name || '').toLowerCase();
+        const nameB = (b.member_name || '').toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+      
+      setTransactions(sortedData);
     } catch (error) {
       console.error('Error fetching transactions:', error);
     } finally {
@@ -203,9 +214,7 @@ export default function MasterSheet() {
     try {
       const res = await fetch('/api/members');
       const data = await res.json();
-      // Sort members alphabetically by name
-      const sortedMembers = data.sort((a: any, b: any) => a.name.localeCompare(b.name));
-      setMembers(sortedMembers);
+      setMembers(data);
     } catch (error) {
       console.error('Error fetching members:', error);
     }
@@ -226,7 +235,13 @@ export default function MasterSheet() {
       return;
     }
 
-    // Prepare data for Excel - one row per member, clean and simple
+    // Check if all columns are hidden
+    if (Object.values(columnFilters).every(v => v)) {
+      alert('Cannot export: All columns are hidden. Please show at least one column.');
+      return;
+    }
+
+    // Prepare data for Excel - only include visible columns
     const excelData = transactions.map((t, index) => {
       const deposits = (t as any).deposits || [];
       const totalDeposits = deposits.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0);
@@ -236,20 +251,38 @@ export default function MasterSheet() {
       const monthYear = transDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
       const paymentDate = `2nd ${monthYear}`;
       
-      return {
-        'S.No': index + 1,
-        'Payment Date': paymentDate,
-        'Unique #': t.unique_number || '',
-        'Member Name': t.member_name,
-        'Alias Name': t.alias_name || '',
-        'Village': (t as any).village || '',
-        'Town': (t as any).town || '',
-        'Total Deposits (₹)': totalDeposits,
-        'Return Rate (%)': (t as any).percentage_of_return || '',
-        'Return Amount (₹)': Math.abs(t.amount),
-        'Status': (t as any).is_dynamic ? 'Live Calculation' : 'Saved',
-        'Notes': t.notes || ''
+      const rowData: any = {
+        'S.No': index + 1
       };
+
+      // Only add columns that are visible (not filtered out)
+      if (!columnFilters.paymentDate) {
+        rowData['Payment Date'] = paymentDate;
+      }
+      if (!columnFilters.memberDetails) {
+        rowData['Unique #'] = t.unique_number || '';
+        rowData['Member Name'] = t.member_name;
+        rowData['Alias Name'] = t.alias_name || '';
+      }
+      if (!columnFilters.location) {
+        rowData['Village'] = (t as any).village || '';
+        rowData['Town'] = (t as any).town || '';
+      }
+      if (!columnFilters.totalDeposits) {
+        rowData['Total Deposits (₹)'] = totalDeposits;
+      }
+      if (!columnFilters.returnRate) {
+        rowData['Return Rate (%)'] = (t as any).percentage_of_return || '';
+      }
+      if (!columnFilters.returnAmount) {
+        rowData['Return Amount (₹)'] = Math.abs(t.amount);
+      }
+      if (!columnFilters.notes) {
+        rowData['Status'] = (t as any).is_dynamic ? 'Live Calculation' : 'Saved';
+        rowData['Notes'] = t.notes || '';
+      }
+
+      return rowData;
     });
 
     // Create workbook and worksheet
@@ -257,21 +290,27 @@ export default function MasterSheet() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Returns');
 
-    // Set column widths for better readability
-    const colWidths = [
-      { wch: 6 },  // S.No
-      { wch: 20 }, // Payment Date
-      { wch: 10 }, // Unique #
-      { wch: 25 }, // Member Name
-      { wch: 15 }, // Alias Name
-      { wch: 20 }, // Village
-      { wch: 20 }, // Town
-      { wch: 18 }, // Total Deposits
-      { wch: 12 }, // Return Rate
-      { wch: 18 }, // Return Amount
-      { wch: 18 }, // Status
-      { wch: 30 }  // Notes
-    ];
+    // Set column widths dynamically based on visible columns
+    const colWidths: any[] = [{ wch: 6 }]; // S.No always included
+    
+    if (!columnFilters.paymentDate) colWidths.push({ wch: 20 }); // Payment Date
+    if (!columnFilters.memberDetails) {
+      colWidths.push({ wch: 10 }); // Unique #
+      colWidths.push({ wch: 25 }); // Member Name
+      colWidths.push({ wch: 15 }); // Alias Name
+    }
+    if (!columnFilters.location) {
+      colWidths.push({ wch: 20 }); // Village
+      colWidths.push({ wch: 20 }); // Town
+    }
+    if (!columnFilters.totalDeposits) colWidths.push({ wch: 18 }); // Total Deposits
+    if (!columnFilters.returnRate) colWidths.push({ wch: 12 }); // Return Rate
+    if (!columnFilters.returnAmount) colWidths.push({ wch: 18 }); // Return Amount
+    if (!columnFilters.notes) {
+      colWidths.push({ wch: 18 }); // Status
+      colWidths.push({ wch: 30 }); // Notes
+    }
+    
     ws['!cols'] = colWidths;
 
     // Generate filename with month
@@ -403,7 +442,7 @@ export default function MasterSheet() {
               }}
               disabled={transactions.length === 0}
             >
-              📥 Download Excel Sheet
+              📥 Download Filtered Excel
             </button>
           </div>
           
@@ -450,41 +489,103 @@ export default function MasterSheet() {
           )}
         </div>
 
-        {/* Transaction Type Filters */}
+        {/* Column Filter Section */}
         <div className="card" style={{ marginBottom: '24px' }}>
-          <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 700, color: '#1e293b' }}>🔍 Transaction Filters</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '16px' }}>
+            <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700 }}>🔧 Column Filters</h3>
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => setColumnFilters({
+                  paymentDate: false, memberDetails: false, location: false,
+                  totalDeposits: false, returnRate: false, returnAmount: false, notes: false
+                })}
+                className="btn btn-secondary"
+                style={{ padding: '8px 16px', fontSize: '14px' }}
+              >
+                Show All
+              </button>
+              <button
+                onClick={() => setColumnFilters({
+                  paymentDate: true, memberDetails: true, location: true,
+                  totalDeposits: true, returnRate: true, returnAmount: true, notes: true
+                })}
+                className="btn btn-secondary"
+                style={{ padding: '8px 16px', fontSize: '14px' }}
+              >
+                Hide All
+              </button>
+            </div>
+          </div>
+          
           <div style={{ 
             display: 'grid', 
             gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-            gap: '12px'
+            gap: '12px',
+            background: '#f8fafc',
+            padding: '20px',
+            borderRadius: '12px',
+            border: '2px solid #e2e8f0'
           }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '8px 12px', borderRadius: '8px', background: filters.showDeposits ? '#f0fdf4' : '#f8fafc', border: '1px solid', borderColor: filters.showDeposits ? '#22c55e' : '#e2e8f0' }}>
-              <input
-                type="checkbox"
-                checked={filters.showDeposits}
-                onChange={(e) => setFilters({...filters, showDeposits: e.target.checked})}
-                style={{ accentColor: '#22c55e' }}
-              />
-              <span style={{ fontWeight: 600, color: filters.showDeposits ? '#166534' : '#64748b' }}>💰 Deposits</span>
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '8px 12px', borderRadius: '8px', background: filters.showWithdrawals ? '#fef2f2' : '#f8fafc', border: '1px solid', borderColor: filters.showWithdrawals ? '#ef4444' : '#e2e8f0' }}>
-              <input
-                type="checkbox"
-                checked={filters.showWithdrawals}
-                onChange={(e) => setFilters({...filters, showWithdrawals: e.target.checked})}
-                style={{ accentColor: '#ef4444' }}
-              />
-              <span style={{ fontWeight: 600, color: filters.showWithdrawals ? '#dc2626' : '#64748b' }}>💸 Withdrawals</span>
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '8px 12px', borderRadius: '8px', background: filters.showReturns ? '#f0f9ff' : '#f8fafc', border: '1px solid', borderColor: filters.showReturns ? '#3b82f6' : '#e2e8f0' }}>
-              <input
-                type="checkbox"
-                checked={filters.showReturns}
-                onChange={(e) => setFilters({...filters, showReturns: e.target.checked})}
-                style={{ accentColor: '#3b82f6' }}
-              />
-              <span style={{ fontWeight: 600, color: filters.showReturns ? '#1d4ed8' : '#64748b' }}>📈 Returns</span>
-            </label>
+            {Object.entries({
+              paymentDate: 'Payment Date',
+              memberDetails: 'Member Details',
+              location: 'Village - Town',
+              totalDeposits: 'Total Deposits',
+              returnRate: 'Return Rate',
+              returnAmount: 'Return Amount',
+              notes: 'Notes'
+            }).map(([key, label]) => (
+              <label key={key} style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '8px',
+                cursor: 'pointer',
+                padding: '8px 12px',
+                borderRadius: '8px',
+                background: columnFilters[key as keyof typeof columnFilters] ? '#fee2e2' : '#f0f9ff',
+                border: `2px solid ${columnFilters[key as keyof typeof columnFilters] ? '#fca5a5' : '#bae6fd'}`,
+                transition: 'all 0.2s ease'
+              }}>
+                <input
+                  type="checkbox"
+                  checked={columnFilters[key as keyof typeof columnFilters]}
+                  onChange={(e) => setColumnFilters(prev => ({
+                    ...prev,
+                    [key]: e.target.checked
+                  }))}
+                  style={{ 
+                    width: '16px', 
+                    height: '16px',
+                    accentColor: '#ef4444'
+                  }}
+                />
+                <span style={{ 
+                  fontSize: '14px', 
+                  fontWeight: 600,
+                  color: columnFilters[key as keyof typeof columnFilters] ? '#dc2626' : '#0369a1'
+                }}>
+                  {columnFilters[key as keyof typeof columnFilters] ? '🚫' : '✅'} {label}
+                </span>
+              </label>
+            ))}
+          </div>
+          
+          <div style={{ 
+            marginTop: '16px', 
+            padding: '12px 16px', 
+            background: '#fef3c7', 
+            borderRadius: '8px',
+            border: '1px solid #fbbf24'
+          }}>
+            <p style={{ 
+              margin: 0, 
+              fontSize: '13px', 
+              color: '#92400e', 
+              fontWeight: 600 
+            }}>
+              💡 <strong>Filter Logic:</strong> Checked = Hide column, Unchecked = Show column. 
+              Downloads will only include visible columns.
+            </p>
           </div>
         </div>
 
@@ -522,39 +623,36 @@ export default function MasterSheet() {
             <table className="table">
               <thead>
                 <tr>
-                  <th>Payment Date</th>
-                  <th>Member Details</th>
-                  <th>Village - Town</th>
-                  <th>Total Deposits</th>
-                  <th>Return Rate</th>
-                  <th>Return Amount</th>
-                  <th>Notes</th>
+                  {!columnFilters.paymentDate && <th>Payment Date</th>}
+                  {!columnFilters.memberDetails && <th>Member Details</th>}
+                  {!columnFilters.location && <th>Village - Town</th>}
+                  {!columnFilters.totalDeposits && <th>Total Deposits</th>}
+                  {!columnFilters.returnRate && <th>Return Rate</th>}
+                  {!columnFilters.returnAmount && <th>Return Amount</th>}
+                  {!columnFilters.notes && <th>Notes</th>}
                 </tr>
               </thead>
               <tbody>
-                {(() => {
-                  // Filter transactions based on selected filters
-                  const filteredTransactions = transactions.filter(transaction => {
-                    if (transaction.transaction_type === 'deposit' && !filters.showDeposits) return false;
-                    if (transaction.transaction_type === 'withdrawal' && !filters.showWithdrawals) return false;
-                    if (transaction.transaction_type === 'return' && !filters.showReturns) return false;
-                    return true;
-                  });
-                  
-                  // Sort alphabetically by member name
-                  const sortedTransactions = filteredTransactions.sort((a, b) => a.member_name.localeCompare(b.member_name));
-                  
-                  return sortedTransactions.length === 0 ? (
+                {transactions.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: '60px 20px' }}>
+                    <td colSpan={Object.values(columnFilters).filter(v => !v).length || 1} style={{ textAlign: 'center', padding: '60px 20px' }}>
                       <div style={{ fontSize: '48px', marginBottom: '16px' }}>📋</div>
                       <p style={{ fontSize: '16px', color: '#64748b', fontWeight: 500 }}>
                         No returns found.
                       </p>
                     </td>
                   </tr>
+                ) : Object.values(columnFilters).every(v => v) ? (
+                  <tr>
+                    <td colSpan={1} style={{ textAlign: 'center', padding: '60px 20px' }}>
+                      <div style={{ fontSize: '48px', marginBottom: '16px' }}>👻</div>
+                      <p style={{ fontSize: '16px', color: '#64748b', fontWeight: 500 }}>
+                        All columns are hidden. Uncheck some filters to show data.
+                      </p>
+                    </td>
+                  </tr>
                 ) : (
-                    sortedTransactions.map((transaction) => {
+                  transactions.map((transaction) => {
                     // Calculate total deposits
                     const totalDeposits = (transaction as any).deposits && (transaction as any).deposits.length > 0
                       ? (transaction as any).deposits.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0)
@@ -566,107 +664,120 @@ export default function MasterSheet() {
                     
                     return (
                       <tr key={`${transaction.transaction_type}-${transaction.id}`}>
-                        <td style={{ fontWeight: 600, color: '#1e293b' }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <span style={{
-                              padding: '8px 12px',
-                              borderRadius: '8px',
-                              fontSize: '14px',
-                              fontWeight: 700,
-                              background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                              color: 'white',
-                              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                              display: 'inline-block',
-                              width: 'fit-content'
-                            }}>
-                              2nd {monthYear}
-                            </span>
-                          </div>
-                        </td>
-                      <td>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ fontWeight: 700, color: '#1e293b', fontSize: '15px' }}>
-                              {transaction.member_name}
-                            </span>
-                            {transaction.unique_number && (
+                        {!columnFilters.paymentDate && (
+                          <td style={{ fontWeight: 600, color: '#1e293b' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                               <span style={{
-                                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                                color: 'white',
-                                padding: '3px 8px',
-                                borderRadius: '6px',
-                                fontSize: '11px',
-                                fontWeight: 700
-                              }}>
-                                #{transaction.unique_number}
-                              </span>
-                            )}
-                          </div>
-                          {transaction.alias_name && (
-                            <span style={{ fontSize: '12px', color: '#64748b' }}>
-                              ({transaction.alias_name})
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td style={{ fontSize: '13px', color: '#475569' }}>
-                        {(transaction as any).village && (transaction as any).town 
-                          ? `${(transaction as any).village} - ${(transaction as any).town}`
-                          : (transaction as any).village || (transaction as any).town || 
-                            <span style={{ color: '#94a3b8' }}>-</span>}
-                      </td>
-                        <td style={{ fontWeight: 700, color: '#10b981', fontSize: '16px' }}>
-                          {totalDeposits > 0 ? formatCurrency(totalDeposits) : <span style={{ color: '#94a3b8' }}>₹0</span>}
-                        </td>
-                        <td>
-                          {(transaction as any).percentage_of_return ? (
-                            <span style={{
-                              background: '#f0fdf4',
-                              color: '#166534',
-                              padding: '6px 12px',
-                              borderRadius: '8px',
-                              fontSize: '14px',
-                              fontWeight: 700,
-                              border: '1px solid #bbf7d0'
-                            }}>
-                              {(transaction as any).percentage_of_return}%
-                            </span>
-                          ) : (
-                            <span style={{ color: '#94a3b8' }}>-</span>
-                          )}
-                        </td>
-                        <td style={{
-                          color: '#3b82f6',
-                          fontWeight: 800,
-                          fontSize: '18px'
-                        }}>
-                          {formatCurrency(Math.abs(transaction.amount))}
-                        </td>
-                        <td style={{ fontSize: '12px', color: '#64748b' }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            {(transaction as any).is_dynamic && (
-                              <span style={{
-                                background: '#fef3c7',
-                                color: '#92400e',
-                                padding: '4px 8px',
-                                borderRadius: '6px',
-                                fontSize: '11px',
+                                padding: '8px 12px',
+                                borderRadius: '8px',
+                                fontSize: '14px',
                                 fontWeight: 700,
-                                border: '1px solid #fbbf24',
+                                background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                                color: 'white',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
                                 display: 'inline-block',
                                 width: 'fit-content'
                               }}>
-                                🔄 Live Calculation
+                                2nd {monthYear}
                               </span>
+                            </div>
+                          </td>
+                        )}
+                        {!columnFilters.memberDetails && (
+                          <td>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontWeight: 700, color: '#1e293b', fontSize: '15px' }}>
+                                  {transaction.member_name}
+                                </span>
+                                {transaction.unique_number && (
+                                  <span style={{
+                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                    color: 'white',
+                                    padding: '3px 8px',
+                                    borderRadius: '6px',
+                                    fontSize: '11px',
+                                    fontWeight: 700
+                                  }}>
+                                    #{transaction.unique_number}
+                                  </span>
+                                )}
+                              </div>
+                              {transaction.alias_name && (
+                                <span style={{ fontSize: '12px', color: '#64748b' }}>
+                                  ({transaction.alias_name})
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                        )}
+                        {!columnFilters.location && (
+                          <td style={{ fontSize: '13px', color: '#475569' }}>
+                            {(transaction as any).village && (transaction as any).town 
+                              ? `${(transaction as any).village} - ${(transaction as any).town}`
+                              : (transaction as any).village || (transaction as any).town || 
+                                <span style={{ color: '#94a3b8' }}>-</span>}
+                          </td>
+                        )}
+                        {!columnFilters.totalDeposits && (
+                          <td style={{ fontWeight: 700, color: '#10b981', fontSize: '16px' }}>
+                            {totalDeposits > 0 ? formatCurrency(totalDeposits) : <span style={{ color: '#94a3b8' }}>₹0</span>}
+                          </td>
+                        )}
+                        {!columnFilters.returnRate && (
+                          <td>
+                            {(transaction as any).percentage_of_return ? (
+                              <span style={{
+                                background: '#f0fdf4',
+                                color: '#166534',
+                                padding: '6px 12px',
+                                borderRadius: '8px',
+                                fontSize: '14px',
+                                fontWeight: 700,
+                                border: '1px solid #bbf7d0'
+                              }}>
+                                {(transaction as any).percentage_of_return}%
+                              </span>
+                            ) : (
+                              <span style={{ color: '#94a3b8' }}>-</span>
                             )}
-                            <span>{transaction.notes || <span style={{ color: '#94a3b8' }}>-</span>}</span>
-                          </div>
-                        </td>
+                          </td>
+                        )}
+                        {!columnFilters.returnAmount && (
+                          <td style={{
+                            color: '#3b82f6',
+                            fontWeight: 800,
+                            fontSize: '18px'
+                          }}>
+                            {formatCurrency(Math.abs(transaction.amount))}
+                          </td>
+                        )}
+                        {!columnFilters.notes && (
+                          <td style={{ fontSize: '12px', color: '#64748b' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              {(transaction as any).is_dynamic && (
+                                <span style={{
+                                  background: '#fef3c7',
+                                  color: '#92400e',
+                                  padding: '4px 8px',
+                                  borderRadius: '6px',
+                                  fontSize: '11px',
+                                  fontWeight: 700,
+                                  border: '1px solid #fbbf24',
+                                  display: 'inline-block',
+                                  width: 'fit-content'
+                                }}>
+                                  🔄 Live Calculation
+                                </span>
+                              )}
+                              <span>{transaction.notes || <span style={{ color: '#94a3b8' }}>-</span>}</span>
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     );
                   })
-                );
-                })()}
+                )}
               </tbody>
             </table>
           </div>

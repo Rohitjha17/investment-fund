@@ -40,7 +40,7 @@ const dbMethods = {
       const withdrawals = withdrawalsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       const returns = returnsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
-      return members.map(member => {
+      const processedMembers = members.map(member => {
         const memberId = parseInt(member.id) || member.id;
         const memberDeposits = deposits.filter((d: any) => {
           const depositMemberId = parseInt(d.member_id) || d.member_id;
@@ -73,6 +73,13 @@ const dbMethods = {
           total_withdrawals: totalWithdrawals,
           total_returns: totalReturns
         };
+      });
+
+      // Sort members alphabetically by name
+      return processedMembers.sort((a: any, b: any) => {
+        const nameA = ((a as any).name || '').toLowerCase();
+        const nameB = ((b as any).name || '').toLowerCase();
+        return nameA.localeCompare(nameB);
       });
     } catch (error) {
       console.error('Error getting members:', error);

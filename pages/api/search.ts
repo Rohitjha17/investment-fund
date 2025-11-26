@@ -27,7 +27,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return nameMatch || aliasMatch || villageMatch || townMatch || uniqueMatch;
     });
 
-    return res.status(200).json(results);
+    // Sort results alphabetically by name
+    const sortedResults = results.sort((a: any, b: any) => {
+      const nameA = (a.name || '').toLowerCase();
+      const nameB = (b.name || '').toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+
+    return res.status(200).json(sortedResults);
   } catch (error) {
     console.error('Error searching:', error);
     return res.status(500).json({ error: 'Failed to search' });
