@@ -33,6 +33,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ error: 'Name and percentage of return are required' });
       }
 
+      // Check for duplicate names and aliases
+      const allMembers = await db.getMembers();
+      
+      // Check for duplicate name
+      const duplicateName = allMembers.find((m: any) => 
+        m.name && m.name.toLowerCase().trim() === name.toLowerCase().trim()
+      );
+      if (duplicateName) {
+        return res.status(400).json({ 
+          error: `A member with the name "${name}" already exists. Please use a different name.` 
+        });
+      }
+
+      // Check for duplicate alias (if provided)
+      if (alias_name && alias_name.trim()) {
+        const duplicateAlias = allMembers.find((m: any) => 
+          m.alias_name && m.alias_name.toLowerCase().trim() === alias_name.toLowerCase().trim()
+        );
+        if (duplicateAlias) {
+          return res.status(400).json({ 
+            error: `A member with the alias "${alias_name}" already exists. Please use a different alias.` 
+          });
+        }
+      }
+
       // Create member (date_of_return defaults to 30 if not provided)
       const member = await db.createMember({
         name,

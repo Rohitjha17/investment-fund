@@ -40,6 +40,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         referral_percent
       } = req.body;
 
+      // Check for duplicate names and aliases (excluding current member)
+      const allMembers = await db.getMembers();
+      
+      // Check for duplicate name
+      if (name) {
+        const duplicateName = allMembers.find((m: any) => 
+          m.id !== memberId && 
+          m.name && 
+          m.name.toLowerCase().trim() === name.toLowerCase().trim()
+        );
+        if (duplicateName) {
+          return res.status(400).json({ 
+            error: `A member with the name "${name}" already exists. Please use a different name.` 
+          });
+        }
+      }
+
+      // Check for duplicate alias (if provided)
+      if (alias_name && alias_name.trim()) {
+        const duplicateAlias = allMembers.find((m: any) => 
+          m.id !== memberId && 
+          m.alias_name && 
+          m.alias_name.toLowerCase().trim() === alias_name.toLowerCase().trim()
+        );
+        if (duplicateAlias) {
+          return res.status(400).json({ 
+            error: `A member with the alias "${alias_name}" already exists. Please use a different alias.` 
+          });
+        }
+      }
+
       const success = await db.updateMember(memberId, {
         name,
         alias_name,

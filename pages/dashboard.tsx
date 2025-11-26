@@ -34,6 +34,7 @@ export default function Dashboard() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [currentReturns, setCurrentReturns] = useState<Record<number, number>>({});
+  const [referralCommissions, setReferralCommissions] = useState<Record<string, number>>({});
   const [columnFilters, setColumnFilters] = useState({
     uniqueNumber: false,
     name: false,
@@ -62,6 +63,7 @@ export default function Dashboard() {
     checkAuth();
     checkAndCalculateMonthlyReturns();
     fetchMembers();
+    fetchReferralCommissions();
   }, []);
 
   const checkAndCalculateMonthlyReturns = async () => {
@@ -119,6 +121,24 @@ export default function Dashboard() {
       console.error('Error fetching members:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchReferralCommissions = async () => {
+    try {
+      const res = await fetch('/api/referral-commissions');
+      const data = await res.json();
+      
+      if (res.ok) {
+        // Create a map of referrer name to total commission
+        const commissionMap: Record<string, number> = {};
+        data.referral_commissions.forEach((item: any) => {
+          commissionMap[item.referrer_name.toLowerCase()] = item.total_commission;
+        });
+        setReferralCommissions(commissionMap);
+      }
+    } catch (error) {
+      console.error('Error fetching referral commissions:', error);
     }
   };
 
@@ -635,9 +655,31 @@ export default function Dashboard() {
                       )}
                       {!columnFilters.referral && (
                         <td>
-                          {member.referral_name 
-                            ? <span style={{ fontSize: '14px' }}>{member.referral_name} <span style={{ color: '#64748b' }}>({member.referral_percent}%)</span></span>
-                            : <span style={{ color: '#94a3b8' }}>-</span>}
+                          {member.referral_name ? (
+                            <div style={{ fontSize: '14px' }}>
+                              <button
+                                onClick={() => router.push(`/referral-profile/${encodeURIComponent(member.referral_name || '')}`)}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  color: '#3b82f6',
+                                  textDecoration: 'underline',
+                                  cursor: 'pointer',
+                                  padding: 0,
+                                  fontSize: '14px',
+                                  fontWeight: 600
+                                }}
+                                title="View referral profile"
+                              >
+                                {member.referral_name}
+                              </button>
+                              <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                                {member.referral_percent}% • Commission: {formatCurrency(referralCommissions[member.referral_name.toLowerCase()] || 0)}
+                              </div>
+                            </div>
+                          ) : (
+                            <span style={{ color: '#94a3b8' }}>-</span>
+                          )}
                         </td>
                       )}
                       {!columnFilters.actions && (

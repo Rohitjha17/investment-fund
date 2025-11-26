@@ -50,8 +50,7 @@ export default function MasterSheet() {
     location: false,
     totalDeposits: false,
     returnRate: false,
-    returnAmount: false,
-    notes: false
+    returnAmount: false
   });
 
   useEffect(() => {
@@ -277,10 +276,6 @@ export default function MasterSheet() {
       if (!columnFilters.returnAmount) {
         rowData['Return Amount (₹)'] = Math.abs(t.amount);
       }
-      if (!columnFilters.notes) {
-        rowData['Status'] = (t as any).is_dynamic ? 'Live Calculation' : 'Saved';
-        rowData['Notes'] = t.notes || '';
-      }
 
       return rowData;
     });
@@ -306,10 +301,6 @@ export default function MasterSheet() {
     if (!columnFilters.totalDeposits) colWidths.push({ wch: 18 }); // Total Deposits
     if (!columnFilters.returnRate) colWidths.push({ wch: 12 }); // Return Rate
     if (!columnFilters.returnAmount) colWidths.push({ wch: 18 }); // Return Amount
-    if (!columnFilters.notes) {
-      colWidths.push({ wch: 18 }); // Status
-      colWidths.push({ wch: 30 }); // Notes
-    }
     
     ws['!cols'] = colWidths;
 
@@ -497,7 +488,7 @@ export default function MasterSheet() {
               <button
                 onClick={() => setColumnFilters({
                   paymentDate: false, memberDetails: false, location: false,
-                  totalDeposits: false, returnRate: false, returnAmount: false, notes: false
+                  totalDeposits: false, returnRate: false, returnAmount: false
                 })}
                 className="btn btn-secondary"
                 style={{ padding: '8px 16px', fontSize: '14px' }}
@@ -507,7 +498,7 @@ export default function MasterSheet() {
               <button
                 onClick={() => setColumnFilters({
                   paymentDate: true, memberDetails: true, location: true,
-                  totalDeposits: true, returnRate: true, returnAmount: true, notes: true
+                  totalDeposits: true, returnRate: true, returnAmount: true
                 })}
                 className="btn btn-secondary"
                 style={{ padding: '8px 16px', fontSize: '14px' }}
@@ -532,8 +523,7 @@ export default function MasterSheet() {
               location: 'Village - Town',
               totalDeposits: 'Total Deposits',
               returnRate: 'Return Rate',
-              returnAmount: 'Return Amount',
-              notes: 'Notes'
+              returnAmount: 'Return Amount'
             }).map(([key, label]) => (
               <label key={key} style={{ 
                 display: 'flex', 
@@ -629,7 +619,6 @@ export default function MasterSheet() {
                   {!columnFilters.totalDeposits && <th>Total Deposits</th>}
                   {!columnFilters.returnRate && <th>Return Rate</th>}
                   {!columnFilters.returnAmount && <th>Return Amount</th>}
-                  {!columnFilters.notes && <th>Notes</th>}
                 </tr>
               </thead>
               <tbody>
@@ -750,28 +739,6 @@ export default function MasterSheet() {
                             fontSize: '18px'
                           }}>
                             {formatCurrency(Math.abs(transaction.amount))}
-                          </td>
-                        )}
-                        {!columnFilters.notes && (
-                          <td style={{ fontSize: '12px', color: '#64748b' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                              {(transaction as any).is_dynamic && (
-                                <span style={{
-                                  background: '#fef3c7',
-                                  color: '#92400e',
-                                  padding: '4px 8px',
-                                  borderRadius: '6px',
-                                  fontSize: '11px',
-                                  fontWeight: 700,
-                                  border: '1px solid #fbbf24',
-                                  display: 'inline-block',
-                                  width: 'fit-content'
-                                }}>
-                                  🔄 Live Calculation
-                                </span>
-                              )}
-                              <span>{transaction.notes || <span style={{ color: '#94a3b8' }}>-</span>}</span>
-                            </div>
                           </td>
                         )}
                       </tr>
