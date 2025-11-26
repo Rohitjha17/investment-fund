@@ -35,6 +35,7 @@ export default function Dashboard() {
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [currentReturns, setCurrentReturns] = useState<Record<number, number>>({});
   const [referralCommissions, setReferralCommissions] = useState<Record<string, number>>({});
+  const [totalReferralCommissions, setTotalReferralCommissions] = useState<number>(0);
   const [columnFilters, setColumnFilters] = useState({
     uniqueNumber: false,
     name: false,
@@ -132,10 +133,15 @@ export default function Dashboard() {
       if (res.ok) {
         // Create a map of referrer name to total commission
         const commissionMap: Record<string, number> = {};
+        let totalCommissions = 0;
+        
         data.referral_commissions.forEach((item: any) => {
           commissionMap[item.referrer_name.toLowerCase()] = item.total_commission;
+          totalCommissions += item.total_commission;
         });
+        
         setReferralCommissions(commissionMap);
+        setTotalReferralCommissions(totalCommissions);
       }
     } catch (error) {
       console.error('Error fetching referral commissions:', error);
@@ -410,6 +416,27 @@ export default function Dashboard() {
                   opacity: 0.3,
                   filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.2))'
                 }}>💵</div>
+              </div>
+            </div>
+            
+            <div className="card" style={{ 
+              background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+              color: 'white',
+              border: 'none',
+              padding: '24px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <p style={{ fontSize: '14px', opacity: 0.9, marginBottom: '8px', fontWeight: 500 }}>Monthly Referral Commission</p>
+                  <h3 style={{ fontSize: '28px', fontWeight: 800, margin: 0 }}>
+                    {formatCurrency(totalReferralCommissions)}
+                  </h3>
+                </div>
+                <div style={{ 
+                  fontSize: '56px', 
+                  opacity: 0.3,
+                  filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.2))'
+                }}>🤝</div>
               </div>
             </div>
           </div>
