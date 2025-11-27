@@ -36,6 +36,8 @@ export default function Dashboard() {
   const [currentReturns, setCurrentReturns] = useState<Record<number, number>>({});
   const [referralCommissions, setReferralCommissions] = useState<Record<string, number>>({});
   const [totalReferralCommissions, setTotalReferralCommissions] = useState<number>(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(15);
   const [columnFilters, setColumnFilters] = useState({
     uniqueNumber: false,
     name: false,
@@ -254,6 +256,136 @@ export default function Dashboard() {
     }).format(amount);
   };
 
+  // Pagination logic
+  const totalPages = Math.ceil(filteredMembers.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentMembers = filteredMembers.slice(startIndex, endIndex);
+
+  const renderPagination = () => {
+    if (totalPages <= 1) return null;
+
+    const pages = [];
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+    if (endPage - startPage + 1 < maxVisiblePages) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+
+    // Previous button
+    if (currentPage > 1) {
+      pages.push(
+        <button
+          key="prev"
+          onClick={() => setCurrentPage(currentPage - 1)}
+          style={{
+            padding: '8px 12px',
+            margin: '0 4px',
+            border: '2px solid #e2e8f0',
+            borderRadius: '8px',
+            background: '#ffffff',
+            color: '#64748b',
+            cursor: 'pointer',
+            fontWeight: 600,
+            transition: 'all 0.2s ease'
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.borderColor = '#6366f1';
+            e.currentTarget.style.color = '#6366f1';
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.borderColor = '#e2e8f0';
+            e.currentTarget.style.color = '#64748b';
+          }}
+        >
+          ← Previous
+        </button>
+      );
+    }
+
+    // Page numbers
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(
+        <button
+          key={i}
+          onClick={() => setCurrentPage(i)}
+          style={{
+            padding: '8px 12px',
+            margin: '0 4px',
+            border: '2px solid',
+            borderColor: i === currentPage ? '#6366f1' : '#e2e8f0',
+            borderRadius: '8px',
+            background: i === currentPage ? '#6366f1' : '#ffffff',
+            color: i === currentPage ? '#ffffff' : '#64748b',
+            cursor: 'pointer',
+            fontWeight: 600,
+            transition: 'all 0.2s ease'
+          }}
+          onMouseOver={(e) => {
+            if (i !== currentPage) {
+              e.currentTarget.style.borderColor = '#6366f1';
+              e.currentTarget.style.color = '#6366f1';
+            }
+          }}
+          onMouseOut={(e) => {
+            if (i !== currentPage) {
+              e.currentTarget.style.borderColor = '#e2e8f0';
+              e.currentTarget.style.color = '#64748b';
+            }
+          }}
+        >
+          {i}
+        </button>
+      );
+    }
+
+    // Next button
+    if (currentPage < totalPages) {
+      pages.push(
+        <button
+          key="next"
+          onClick={() => setCurrentPage(currentPage + 1)}
+          style={{
+            padding: '8px 12px',
+            margin: '0 4px',
+            border: '2px solid #e2e8f0',
+            borderRadius: '8px',
+            background: '#ffffff',
+            color: '#64748b',
+            cursor: 'pointer',
+            fontWeight: 600,
+            transition: 'all 0.2s ease'
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.borderColor = '#6366f1';
+            e.currentTarget.style.color = '#6366f1';
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.borderColor = '#e2e8f0';
+            e.currentTarget.style.color = '#64748b';
+          }}
+        >
+          Next →
+        </button>
+      );
+    }
+
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginTop: '24px',
+        flexWrap: 'wrap',
+        gap: '8px'
+      }}>
+        {pages}
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="container" style={{ 
@@ -315,6 +447,12 @@ export default function Dashboard() {
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
             <button onClick={() => router.push('/master-sheet')} className="btn btn-success">
               📊 Master Sheet
+            </button>
+            <button onClick={() => router.push('/referral-sheet')} className="btn btn-primary" style={{
+              background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+              color: 'white'
+            }}>
+              🤝 Referral Sheet
             </button>
             <button onClick={() => router.push('/transactions')} className="btn btn-primary" style={{
               background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
@@ -588,7 +726,7 @@ export default function Dashboard() {
               borderRadius: '8px',
               fontWeight: 600
             }}>
-              {filteredMembers.length} {filteredMembers.length === 1 ? 'member' : 'members'}
+              Page {currentPage} of {totalPages} ({filteredMembers.length} total members)
             </span>
           </div>
           
@@ -608,7 +746,7 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {filteredMembers.length === 0 ? (
+                {currentMembers.length === 0 ? (
                   <tr>
                     <td colSpan={Object.values(columnFilters).filter(v => !v).length || 1} style={{ textAlign: 'center', padding: '60px 20px' }}>
                       <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔍</div>
@@ -627,7 +765,7 @@ export default function Dashboard() {
                     </td>
                   </tr>
                 ) : (
-                  filteredMembers.map((member) => (
+                  currentMembers.map((member) => (
                     <tr key={member.id}>
                       {!columnFilters.uniqueNumber && (
                         <td>
@@ -745,6 +883,9 @@ export default function Dashboard() {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination */}
+          {renderPagination()}
         </div>
 
         {showAddModal && (

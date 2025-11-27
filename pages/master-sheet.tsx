@@ -52,6 +52,8 @@ export default function MasterSheet() {
     returnRate: false,
     returnAmount: false
   });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(15);
 
   useEffect(() => {
     checkAuth();
@@ -226,6 +228,136 @@ export default function MasterSheet() {
       currency: 'INR',
       maximumFractionDigits: 0
     }).format(amount);
+  };
+
+  // Pagination logic
+  const totalPages = Math.ceil(transactions.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentTransactions = transactions.slice(startIndex, endIndex);
+
+  const renderPagination = () => {
+    if (totalPages <= 1) return null;
+
+    const pages = [];
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+    if (endPage - startPage + 1 < maxVisiblePages) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+
+    // Previous button
+    if (currentPage > 1) {
+      pages.push(
+        <button
+          key="prev"
+          onClick={() => setCurrentPage(currentPage - 1)}
+          style={{
+            padding: '8px 12px',
+            margin: '0 4px',
+            border: '2px solid #e2e8f0',
+            borderRadius: '8px',
+            background: '#ffffff',
+            color: '#64748b',
+            cursor: 'pointer',
+            fontWeight: 600,
+            transition: 'all 0.2s ease'
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.borderColor = '#6366f1';
+            e.currentTarget.style.color = '#6366f1';
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.borderColor = '#e2e8f0';
+            e.currentTarget.style.color = '#64748b';
+          }}
+        >
+          ← Previous
+        </button>
+      );
+    }
+
+    // Page numbers
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(
+        <button
+          key={i}
+          onClick={() => setCurrentPage(i)}
+          style={{
+            padding: '8px 12px',
+            margin: '0 4px',
+            border: '2px solid',
+            borderColor: i === currentPage ? '#6366f1' : '#e2e8f0',
+            borderRadius: '8px',
+            background: i === currentPage ? '#6366f1' : '#ffffff',
+            color: i === currentPage ? '#ffffff' : '#64748b',
+            cursor: 'pointer',
+            fontWeight: 600,
+            transition: 'all 0.2s ease'
+          }}
+          onMouseOver={(e) => {
+            if (i !== currentPage) {
+              e.currentTarget.style.borderColor = '#6366f1';
+              e.currentTarget.style.color = '#6366f1';
+            }
+          }}
+          onMouseOut={(e) => {
+            if (i !== currentPage) {
+              e.currentTarget.style.borderColor = '#e2e8f0';
+              e.currentTarget.style.color = '#64748b';
+            }
+          }}
+        >
+          {i}
+        </button>
+      );
+    }
+
+    // Next button
+    if (currentPage < totalPages) {
+      pages.push(
+        <button
+          key="next"
+          onClick={() => setCurrentPage(currentPage + 1)}
+          style={{
+            padding: '8px 12px',
+            margin: '0 4px',
+            border: '2px solid #e2e8f0',
+            borderRadius: '8px',
+            background: '#ffffff',
+            color: '#64748b',
+            cursor: 'pointer',
+            fontWeight: 600,
+            transition: 'all 0.2s ease'
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.borderColor = '#6366f1';
+            e.currentTarget.style.color = '#6366f1';
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.borderColor = '#e2e8f0';
+            e.currentTarget.style.color = '#64748b';
+          }}
+        >
+          Next →
+        </button>
+      );
+    }
+
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginTop: '24px',
+        flexWrap: 'wrap',
+        gap: '8px'
+      }}>
+        {pages}
+      </div>
+    );
   };
 
   const exportToExcel = () => {
@@ -597,15 +729,15 @@ export default function MasterSheet() {
                 </p>
               )}
             </div>
-            <span style={{ 
-              color: '#64748b', 
+            <span style={{
+              color: '#64748b',
               fontSize: '14px',
               background: '#f1f5f9',
               padding: '6px 12px',
               borderRadius: '8px',
               fontWeight: 600
             }}>
-              {transactions.length} returns
+              Page {currentPage} of {totalPages} ({transactions.length} total returns)
             </span>
           </div>
           
@@ -622,7 +754,7 @@ export default function MasterSheet() {
                 </tr>
               </thead>
               <tbody>
-                {transactions.length === 0 ? (
+                {currentTransactions.length === 0 ? (
                   <tr>
                     <td colSpan={Object.values(columnFilters).filter(v => !v).length || 1} style={{ textAlign: 'center', padding: '60px 20px' }}>
                       <div style={{ fontSize: '48px', marginBottom: '16px' }}>📋</div>
@@ -641,7 +773,7 @@ export default function MasterSheet() {
                     </td>
                   </tr>
                 ) : (
-                  transactions.map((transaction) => {
+                  currentTransactions.map((transaction) => {
                     // Calculate total deposits
                     const totalDeposits = (transaction as any).deposits && (transaction as any).deposits.length > 0
                       ? (transaction as any).deposits.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0)
@@ -748,6 +880,9 @@ export default function MasterSheet() {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination */}
+          {renderPagination()}
         </div>
 
       </div>
