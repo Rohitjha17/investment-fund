@@ -11,7 +11,7 @@ interface ReferralCommission {
   breakdown: Array<{
     member_id: number;
     member_name: string;
-    interest_earned: number;
+    principal_amount: number;
     referral_percent: number;
     commission_amount: number;
     is_direct: boolean;
@@ -31,12 +31,16 @@ export default function ReferralSheet() {
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(15);
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
   const [columnFilters, setColumnFilters] = useState({
     referrerName: false,
     referredCount: false,
     totalCommission: false,
     memberDetails: false,
-    interestEarned: false,
+    principalAmount: false,
     referralPercent: false,
     commissionAmount: false,
     referralType: false
@@ -44,8 +48,12 @@ export default function ReferralSheet() {
 
   useEffect(() => {
     checkAuth();
-    fetchReferralData();
   }, []);
+
+  useEffect(() => {
+    fetchReferralData();
+    setCurrentPage(1); // Reset to first page when month changes
+  }, [selectedMonth]);
 
   const checkAuth = async () => {
     const res = await fetch('/api/auth/check');
@@ -57,7 +65,8 @@ export default function ReferralSheet() {
 
   const fetchReferralData = async () => {
     try {
-      const res = await fetch('/api/referral-commissions');
+      setLoading(true);
+      const res = await fetch(`/api/referral-commissions?month=${selectedMonth}`);
       const data = await res.json();
       
       if (res.ok) {
@@ -99,7 +108,7 @@ export default function ReferralSheet() {
           total_commission: commission.total_commission,
           member_id: breakdown.member_id,
           member_name: breakdown.member_name,
-          interest_earned: breakdown.interest_earned,
+          principal_amount: breakdown.principal_amount,
           referral_percent: breakdown.referral_percent,
           commission_amount: breakdown.commission_amount,
           is_direct: breakdown.is_direct
@@ -130,7 +139,7 @@ export default function ReferralSheet() {
       if (!columnFilters.referredCount) rowData['Total Referred'] = item.referred_count;
       if (!columnFilters.totalCommission) rowData['Total Commission'] = item.total_commission;
       if (!columnFilters.memberDetails) rowData['Member Name'] = item.member_name;
-      if (!columnFilters.interestEarned) rowData['Interest Earned'] = item.interest_earned;
+      if (!columnFilters.principalAmount) rowData['Principal Amount'] = item.principal_amount;
       if (!columnFilters.referralPercent) rowData['Referral %'] = item.referral_percent + '%';
       if (!columnFilters.commissionAmount) rowData['Commission Amount'] = item.commission_amount;
       if (!columnFilters.referralType) rowData['Referral Type'] = item.is_direct ? 'Direct' : 'Indirect';
@@ -146,7 +155,7 @@ export default function ReferralSheet() {
     if (!columnFilters.referredCount) colWidths.push({ wch: 15 });
     if (!columnFilters.totalCommission) colWidths.push({ wch: 18 });
     if (!columnFilters.memberDetails) colWidths.push({ wch: 25 });
-    if (!columnFilters.interestEarned) colWidths.push({ wch: 18 });
+    if (!columnFilters.principalAmount) colWidths.push({ wch: 18 });
     if (!columnFilters.referralPercent) colWidths.push({ wch: 15 });
     if (!columnFilters.commissionAmount) colWidths.push({ wch: 20 });
     if (!columnFilters.referralType) colWidths.push({ wch: 15 });
@@ -156,7 +165,7 @@ export default function ReferralSheet() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Referral Commissions');
     
-    const fileName = `Referral_Commissions_${new Date().toISOString().split('T')[0]}.xlsx`;
+    const fileName = `Referral_Commissions_${selectedMonth}.xlsx`;
     XLSX.writeFile(wb, fileName);
   };
 
@@ -358,6 +367,30 @@ export default function ReferralSheet() {
           </div>
         </div>
 
+        {/* Month Selector */}
+        <div className="card" style={{ marginBottom: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+            <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700 }}>📅 Select Month</h3>
+            <input
+              type="month"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              style={{
+                padding: '12px 16px',
+                fontSize: '16px',
+                border: '2px solid #e2e8f0',
+                borderRadius: '12px',
+                background: '#f8fafc',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            />
+          </div>
+          <p style={{ margin: '12px 0 0 0', color: '#64748b', fontSize: '14px' }}>
+            💡 Commission is calculated on <strong>Principal Amount</strong> (Total Deposits - Total Withdrawals) × Referral %
+          </p>
+        </div>
+
         {/* Stats Summary */}
         {referralData && (
           <div className="grid" style={{ marginBottom: '24px' }}>
@@ -465,7 +498,7 @@ export default function ReferralSheet() {
               <button
                 onClick={() => setColumnFilters({
                   referrerName: false, referredCount: false, totalCommission: false, memberDetails: false,
-                  interestEarned: false, referralPercent: false, commissionAmount: false, referralType: false
+                  principalAmount: false, referralPercent: false, commissionAmount: false, referralType: false
                 })}
                 className="btn btn-secondary"
                 style={{ padding: '8px 16px', fontSize: '14px' }}
@@ -475,7 +508,7 @@ export default function ReferralSheet() {
               <button
                 onClick={() => setColumnFilters({
                   referrerName: true, referredCount: true, totalCommission: true, memberDetails: true,
-                  interestEarned: true, referralPercent: true, commissionAmount: true, referralType: true
+                  principalAmount: true, referralPercent: true, commissionAmount: true, referralType: true
                 })}
                 className="btn btn-secondary"
                 style={{ padding: '8px 16px', fontSize: '14px' }}
@@ -499,7 +532,7 @@ export default function ReferralSheet() {
               referredCount: 'Total Referred',
               totalCommission: 'Total Commission',
               memberDetails: 'Member Details',
-              interestEarned: 'Interest Earned',
+              principalAmount: 'Principal Amount',
               referralPercent: 'Referral %',
               commissionAmount: 'Commission Amount',
               referralType: 'Referral Type'
@@ -552,7 +585,7 @@ export default function ReferralSheet() {
               borderRadius: '8px',
               fontWeight: 600
             }}>
-              Page {currentPage} of {totalPages} ({flattenedData.length} total records)
+              Page {currentPage} of {totalPages || 1} ({flattenedData.length} total records)
             </span>
           </div>
           
@@ -564,7 +597,7 @@ export default function ReferralSheet() {
                   {!columnFilters.referredCount && <th>Total Referred</th>}
                   {!columnFilters.totalCommission && <th>Total Commission</th>}
                   {!columnFilters.memberDetails && <th>Member Details</th>}
-                  {!columnFilters.interestEarned && <th>Interest Earned</th>}
+                  {!columnFilters.principalAmount && <th>Principal Amount</th>}
                   {!columnFilters.referralPercent && <th>Referral %</th>}
                   {!columnFilters.commissionAmount && <th>Commission Amount</th>}
                   {!columnFilters.referralType && <th>Referral Type</th>}
@@ -576,7 +609,7 @@ export default function ReferralSheet() {
                     <td colSpan={Object.values(columnFilters).filter(v => !v).length || 1} style={{ textAlign: 'center', padding: '60px 20px' }}>
                       <div style={{ fontSize: '48px', marginBottom: '16px' }}>📊</div>
                       <p style={{ fontSize: '16px', color: '#64748b', fontWeight: 500 }}>
-                        No referral data found.
+                        No referral data found for {referralData?.period || 'this month'}.
                       </p>
                     </td>
                   </tr>
@@ -639,9 +672,9 @@ export default function ReferralSheet() {
                           </div>
                         </td>
                       )}
-                      {!columnFilters.interestEarned && (
+                      {!columnFilters.principalAmount && (
                         <td style={{ fontWeight: 700, color: '#10b981', fontSize: '16px' }}>
-                          {formatCurrency(item.interest_earned)}
+                          {formatCurrency(item.principal_amount)}
                         </td>
                       )}
                       {!columnFilters.referralPercent && (

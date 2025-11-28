@@ -1,6 +1,26 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import db from '@/lib/db-firebase';
-import { calculateComplexInterest, getCurrentMonthWindow } from '@/lib/utils';
+
+// Get month window for any given month (format: YYYY-MM)
+function getMonthWindow(monthStr?: string): { start: Date; end: Date } {
+  let year: number, month: number;
+  
+  if (monthStr) {
+    const [y, m] = monthStr.split('-');
+    year = parseInt(y);
+    month = parseInt(m) - 1; // Convert to 0-indexed
+  } else {
+    const now = new Date();
+    year = now.getFullYear();
+    month = now.getMonth();
+  }
+  
+  const start = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const end = new Date(year, month, lastDay, 23, 59, 59, 999);
+  
+  return { start, end };
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -8,8 +28,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Get current month window for calculations
-    const window = getCurrentMonthWindow();
+    // Get month from query params (optional - defaults to current month)
+    const { month } = req.query;
+    const monthStr = typeof month === 'string' ? month : undefined;
+    
+    // Get month window for calculations
+    const window = getMonthWindow(monthStr);
     const startDate = window.start;
     const endDate = window.end;
 
@@ -24,7 +48,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       breakdown: Array<{
         member_id: number;
         member_name: string;
-        interest_earned: number;
+        principal_amount: number;
         referral_percent: number;
         commission_amount: number;
         is_direct: boolean;
@@ -60,32 +84,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       if (!referralName || referralPercent === 0) continue;
 
-      // Calculate this member's current month interest
-      const defaultPercentage = (fullMember as any).percentage_of_return || 0;
-      const deposits = (fullMember.deposits || []).map((d: any) => ({
-        amount: d.amount,
-        date: d.deposit_date,
-        percentage: d.percentage !== null && d.percentage !== undefined 
-          ? d.percentage 
-          : defaultPercentage
-      }));
+      // Calculate principal amount (total deposits - total withdrawals) as of the selected month
+      const deposits = (fullMember.deposits || []).filter((d: any) => {
+        const depositDate = new Date(d.deposit_date);
+        return depositDate <= endDate;
+      });
       
-      const withdrawals = (fullMember.withdrawals || []).map((w: any) => ({
-        amount: w.amount,
-        date: w.withdrawal_date
-      }));
+      const withdrawals = (fullMember.withdrawals || []).filter((w: any) => {
+        const withdrawalDate = new Date(w.withdrawal_date);
+        return withdrawalDate <= endDate;
+      });
 
-      // Calculate interest earned by this member
-      const interestEarned = calculateComplexInterest(
-        deposits,
-        withdrawals,
-        defaultPercentage,
-        startDate,
-        endDate
-      );
+      const totalDeposits = deposits.reduce((sum: number, d: any) => sum + d.amount, 0);
+      const totalWithdrawals = withdrawals.reduce((sum: number, w: any) => sum + w.amount, 0);
+      const principalAmount = totalDeposits - totalWithdrawals;
 
-      // Calculate commission for the referrer
-      const commissionAmount = (interestEarned * referralPercent) / 100;
+      if (principalAmount <= 0) continue;
+
+      // Calculate commission based on principal amount
+      // Commission = (Principal Amount * Referral Percent) / 100
+      const commissionAmount = (principalAmount * referralPercent) / 100;
 
       // Find the root referrer for hierarchical referrals
       const rootReferrer = findRootReferrer(referralName);
@@ -106,7 +124,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       referralCommissions[normalizedRootReferrer].breakdown.push({
         member_id: memberId,
         member_name: (fullMember as any).name,
-        interest_earned: interestEarned,
+        principal_amount: principalAmount,
         referral_percent: referralPercent,
         commission_amount: commissionAmount,
         is_direct: isDirect
@@ -117,12 +135,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const commissionData = Object.values(referralCommissions)
       .map(data => ({
         ...data,
-        total_commission: Math.round(data.total_commission * 100) / 100
+        total_commission: Math.round(data.total_commission * 100) / 100,
+        breakdown: data.breakdown.map(b => ({
+          ...b,
+          commission_amount: Math.round(b.commission_amount * 100) / 100
+        }))
       }))
       .sort((a, b) => b.total_commission - a.total_commission);
 
+    // Format period name
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                       'July', 'August', 'September', 'October', 'November', 'December'];
+    const periodName = `${monthNames[startDate.getMonth()]} ${startDate.getFullYear()}`;
+
     return res.status(200).json({
-      period: 'Current Month',
+      period: periodName,
       start_date: startDate.toISOString(),
       end_date: endDate.toISOString(),
       referral_commissions: commissionData
