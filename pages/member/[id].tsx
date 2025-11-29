@@ -270,7 +270,7 @@ export default function MemberDetail() {
 
         <div className="grid">
           <div className="card">
-            <h3 style={{ marginBottom: '20px', fontSize: '20px', fontWeight: 700 }}>👤 Member Information</h3>
+            <h3 style={{ marginBottom: '20px', fontSize: '20px', fontWeight: 700 }}>Member Information</h3>
             <div style={{ display: 'grid', gap: '12px' }}>
               <p><strong style={{ color: '#64748b' }}>Unique #:</strong> 
                 <span style={{
