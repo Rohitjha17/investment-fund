@@ -37,7 +37,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const startDate = window.start;
     const endDate = window.end;
 
-    // Get all members
+    // Get all members (optimized - only basic info needed)
     const allMembers = await db.getMembers();
     
     // Create a map to store referral commissions for each referrer
@@ -73,9 +73,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return findRootReferrer((member as any).referral_name, visited);
     };
 
+    // OPTIMIZED: Only fetch full member data for members with referrals
+    const membersWithReferrals = allMembers.filter((m: any) => 
+      (m as any).referral_name && (m as any).referral_percent > 0
+    );
+
     // Process each member to calculate referral commissions
-    for (const member of allMembers) {
+    for (const member of membersWithReferrals) {
       const memberId = parseInt(member.id.toString());
+      // Only fetch full member data when needed (has referral)
       const fullMember = await db.getMember(memberId);
       if (!fullMember) continue;
 

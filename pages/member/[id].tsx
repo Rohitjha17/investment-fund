@@ -40,27 +40,11 @@ export default function MemberDetail() {
   useEffect(() => {
     if (id) {
       checkAuth();
-      checkAndCalculateMonthlyReturns();
       fetchMember();
     }
   }, [id]);
 
-  const checkAndCalculateMonthlyReturns = async () => {
-    try {
-      // Always check and calculate returns if it's 2nd of month
-      const res = await fetch('/api/calculate-monthly-returns', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      const data = await res.json();
-      if (res.ok && data.calculated) {
-        // Refresh member data after calculation
-        fetchMember();
-      }
-    } catch (error) {
-      console.error('Error calculating monthly returns:', error);
-    }
-  };
+  // Removed checkAndCalculateMonthlyReturns - it should only run on 2nd of month, not on every page load
 
   const checkAuth = async () => {
     const res = await fetch('/api/auth/check');

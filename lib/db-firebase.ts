@@ -26,49 +26,59 @@ const dbMethods = {
   // Members
   async getMembers() {
     try {
-      const membersSnapshot = await getDocs(collection(db, COLLECTIONS.members));
-      const members = membersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-      // Get all deposits, withdrawals, returns
-      const [depositsSnapshot, withdrawalsSnapshot, returnsSnapshot] = await Promise.all([
+      // OPTIMIZED: Fetch all data in parallel and group by member_id
+      // This is more efficient than N separate queries
+      const [membersSnapshot, depositsSnapshot, withdrawalsSnapshot, returnsSnapshot] = await Promise.all([
+        getDocs(collection(db, COLLECTIONS.members)),
         getDocs(collection(db, COLLECTIONS.deposits)),
         getDocs(collection(db, COLLECTIONS.withdrawals)),
         getDocs(collection(db, COLLECTIONS.returns))
       ]);
 
-      const deposits = depositsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      const withdrawals = withdrawalsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      const returns = returnsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      const members = membersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      // Group deposits, withdrawals, and returns by member_id
+      const depositsByMember: Record<string, any[]> = {};
+      const withdrawalsByMember: Record<string, any[]> = {};
+      const returnsByMember: Record<string, any[]> = {};
 
+      depositsSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        const memberId = data.member_id?.toString() || '';
+        if (!depositsByMember[memberId]) depositsByMember[memberId] = [];
+        depositsByMember[memberId].push({ id: doc.id, ...data });
+      });
+
+      withdrawalsSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        const memberId = data.member_id?.toString() || '';
+        if (!withdrawalsByMember[memberId]) withdrawalsByMember[memberId] = [];
+        withdrawalsByMember[memberId].push({ id: doc.id, ...data });
+      });
+
+      returnsSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        const memberId = data.member_id?.toString() || '';
+        if (!returnsByMember[memberId]) returnsByMember[memberId] = [];
+        returnsByMember[memberId].push({ id: doc.id, ...data });
+      });
+
+      // Calculate totals for each member
       const processedMembers = members.map(member => {
         const memberId = parseInt(member.id) || member.id;
-        const memberDeposits = deposits.filter((d: any) => {
-          const depositMemberId = parseInt(d.member_id) || d.member_id;
-          return depositMemberId === memberId || depositMemberId === parseInt(member.id) || depositMemberId === member.id;
-        });
-        const memberWithdrawals = withdrawals.filter((w: any) => {
-          const withdrawalMemberId = parseInt(w.member_id) || w.member_id;
-          return withdrawalMemberId === memberId || withdrawalMemberId === parseInt(member.id) || withdrawalMemberId === member.id;
-        });
-        const memberReturns = returns.filter((r: any) => {
-          const returnMemberId = parseInt(r.member_id) || r.member_id;
-          return returnMemberId === memberId || returnMemberId === parseInt(member.id) || returnMemberId === member.id;
-        });
+        const memberIdStr = memberId.toString();
+        
+        const deposits = depositsByMember[memberIdStr] || [];
+        const withdrawals = withdrawalsByMember[memberIdStr] || [];
+        const returns = returnsByMember[memberIdStr] || [];
 
-        const totalDeposits = memberDeposits.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0);
-        const totalWithdrawals = memberWithdrawals.reduce((sum: number, w: any) => sum + (parseFloat(w.amount) || 0), 0);
-        const totalReturns = memberReturns.reduce((sum: number, r: any) => sum + (parseFloat(r.return_amount) || 0), 0);
+        const totalDeposits = deposits.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0);
+        const totalWithdrawals = withdrawals.reduce((sum: number, w: any) => sum + (parseFloat(w.amount) || 0), 0);
+        const totalReturns = returns.reduce((sum: number, r: any) => sum + (parseFloat(r.return_amount) || 0), 0);
 
         return {
           ...member,
           id: memberId,
-          deposits: memberDeposits.map((d: any) => ({
-            ...d,
-            id: parseInt(d.id) || d.id,
-            amount: parseFloat(d.amount) || 0,
-            percentage: d.percentage !== null && d.percentage !== undefined ? parseFloat(d.percentage) : null,
-            deposit_date: toISO(d.deposit_date)
-          })),
           total_deposits: totalDeposits,
           total_withdrawals: totalWithdrawals,
           total_returns: totalReturns
@@ -95,32 +105,16 @@ const dbMethods = {
 
       const member = { id: memberDoc.id, ...memberDoc.data() };
 
-      // Get all deposits and filter (handle both string and number member_id)
-      const [allDepositsSnapshot, allWithdrawalsSnapshot, allReturnsSnapshot] = await Promise.all([
-        getDocs(collection(db, COLLECTIONS.deposits)),
-        getDocs(collection(db, COLLECTIONS.withdrawals)),
-        getDocs(collection(db, COLLECTIONS.returns))
+      // OPTIMIZED: Use Firestore queries with where clauses instead of fetching all data
+      const [depositsSnapshot, withdrawalsSnapshot, returnsSnapshot] = await Promise.all([
+        getDocs(query(collection(db, COLLECTIONS.deposits), where('member_id', '==', memberId))),
+        getDocs(query(collection(db, COLLECTIONS.withdrawals), where('member_id', '==', memberId))),
+        getDocs(query(collection(db, COLLECTIONS.returns), where('member_id', '==', memberId)))
       ]);
 
-      const allDeposits = allDepositsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      const allWithdrawals = allWithdrawalsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      const allReturns = allReturnsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-
-      // Filter by member_id (handle both string and number)
-      const deposits = allDeposits.filter((d: any) => {
-        const depositMemberId = parseInt(d.member_id) || d.member_id;
-        return depositMemberId === memberId || depositMemberId === parseInt(member.id) || depositMemberId === member.id;
-      });
-      
-      const withdrawals = allWithdrawals.filter((w: any) => {
-        const withdrawalMemberId = parseInt(w.member_id) || w.member_id;
-        return withdrawalMemberId === memberId || withdrawalMemberId === parseInt(member.id) || withdrawalMemberId === member.id;
-      });
-      
-      const returns = allReturns.filter((r: any) => {
-        const returnMemberId = parseInt(r.member_id) || r.member_id;
-        return returnMemberId === memberId || returnMemberId === parseInt(member.id) || returnMemberId === member.id;
-      });
+      const deposits = depositsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      const withdrawals = withdrawalsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      const returns = returnsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
       return {
         ...member,
@@ -274,10 +268,10 @@ const dbMethods = {
   // Deposits
   async getDeposits() {
     try {
-      const depositsSnapshot = await getDocs(collection(db, COLLECTIONS.deposits));
+      const depositsSnapshot = await getDocs(query(collection(db, COLLECTIONS.deposits), orderBy('deposit_date', 'desc')));
       const deposits = depositsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
-      // Get all members
+      // Get all members (cache this if possible)
       const membersSnapshot = await getDocs(collection(db, COLLECTIONS.members));
       const members = membersSnapshot.docs.reduce((acc: any, doc) => {
         acc[doc.id] = { id: doc.id, ...doc.data() };
@@ -377,7 +371,7 @@ const dbMethods = {
   // Withdrawals
   async getWithdrawals() {
     try {
-      const withdrawalsSnapshot = await getDocs(collection(db, COLLECTIONS.withdrawals));
+      const withdrawalsSnapshot = await getDocs(query(collection(db, COLLECTIONS.withdrawals), orderBy('withdrawal_date', 'desc')));
       const withdrawals = withdrawalsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
       const membersSnapshot = await getDocs(collection(db, COLLECTIONS.members));
@@ -477,7 +471,7 @@ const dbMethods = {
   // Returns
   async getReturns() {
     try {
-      const returnsSnapshot = await getDocs(collection(db, COLLECTIONS.returns));
+      const returnsSnapshot = await getDocs(query(collection(db, COLLECTIONS.returns), orderBy('return_date', 'desc')));
       const returns = returnsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
       const membersSnapshot = await getDocs(collection(db, COLLECTIONS.members));

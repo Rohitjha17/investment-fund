@@ -64,27 +64,11 @@ export default function Dashboard() {
 
   useEffect(() => {
     checkAuth();
-    checkAndCalculateMonthlyReturns();
     fetchMembers();
     fetchReferralCommissions();
   }, []);
 
-  const checkAndCalculateMonthlyReturns = async () => {
-    try {
-      // Always check and calculate returns if it's 2nd of month
-      const res = await fetch('/api/calculate-monthly-returns', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      const data = await res.json();
-      if (res.ok && data.calculated) {
-        // Refresh members after calculation
-        fetchMembers();
-      }
-    } catch (error) {
-      console.error('Error calculating monthly returns:', error);
-    }
-  };
+  // Removed checkAndCalculateMonthlyReturns - it should only run on 2nd of month, not on every page load
 
 
   const checkAuth = async () => {
@@ -102,24 +86,23 @@ export default function Dashboard() {
       setMembers(data);
       setFilteredMembers(data);
       
-      // Fetch current returns for each member
-      const returnsMap: Record<number, number> = {};
-      await Promise.all(data.map(async (member: Member) => {
+      // OPTIMIZED: Use batch endpoint instead of N+1 queries
+      if (data.length > 0) {
         try {
-          const returnsRes = await fetch('/api/member/current-returns', {
+          const memberIds = data.map((m: Member) => m.id);
+          const returnsRes = await fetch('/api/member/batch-current-returns', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ member_id: member.id })
+            body: JSON.stringify({ member_ids: memberIds })
           });
           const returnsData = await returnsRes.json();
-          if (returnsRes.ok) {
-            returnsMap[member.id] = returnsData.current_return || 0;
+          if (returnsRes.ok && returnsData.current_returns) {
+            setCurrentReturns(returnsData.current_returns);
           }
         } catch (error) {
-          console.error(`Error fetching returns for member ${member.id}:`, error);
+          console.error('Error fetching batch returns:', error);
         }
-      }));
-      setCurrentReturns(returnsMap);
+      }
     } catch (error) {
       console.error('Error fetching members:', error);
     } finally {

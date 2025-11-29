@@ -58,7 +58,6 @@ export default function MasterSheet() {
   useEffect(() => {
     checkAuth();
     fetchMembers();
-    checkAndCalculateMonthlyReturns();
   }, []);
 
   useEffect(() => {
@@ -87,22 +86,7 @@ export default function MasterSheet() {
     }
   };
 
-  const checkAndCalculateMonthlyReturns = async () => {
-    try {
-      // Always check and calculate returns if it's 2nd of month
-      const res = await fetch('/api/calculate-monthly-returns', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      const data = await res.json();
-      if (res.ok && data.calculated) {
-        // Refresh transactions after calculation
-        fetchTransactions();
-      }
-    } catch (error) {
-      console.error('Error calculating monthly returns:', error);
-    }
-  };
+  // Removed checkAndCalculateMonthlyReturns - it should only run on 2nd of month, not on every page load
 
   const fetchTransactions = async () => {
     try {
