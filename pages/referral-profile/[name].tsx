@@ -142,7 +142,7 @@ export default function ReferralProfile() {
             alignItems: 'center',
             gap: '12px'
           }}>
-            👥 {referralData?.referrer_name}
+            {referralData?.referrer_name}
           </h1>
           <p style={{ color: '#64748b', fontSize: '16px', margin: 0 }}>
             Referral Commission Profile
@@ -170,7 +170,7 @@ export default function ReferralProfile() {
           border: 'none'
         }}>
           <h3 style={{ color: 'white', marginBottom: '16px', fontSize: '18px', fontWeight: 600 }}>
-            💰 Total Commission
+            Total Commission
           </h3>
           <p style={{ 
             fontSize: '36px', 
@@ -191,7 +191,7 @@ export default function ReferralProfile() {
           border: 'none'
         }}>
           <h3 style={{ color: 'white', marginBottom: '16px', fontSize: '18px', fontWeight: 600 }}>
-            👥 Total Referrals
+            Total Referrals
           </h3>
           <p style={{ 
             fontSize: '36px', 
@@ -212,7 +212,7 @@ export default function ReferralProfile() {
           border: 'none'
         }}>
           <h3 style={{ color: 'white', marginBottom: '16px', fontSize: '18px', fontWeight: 600 }}>
-            📊 Average Commission
+            Average Commission
           </h3>
           <p style={{ 
             fontSize: '36px', 
@@ -345,7 +345,7 @@ export default function ReferralProfile() {
                         fontWeight: 600,
                         border: item.is_direct ? '1px solid #bae6fd' : '1px solid #fde68a'
                       }}>
-                        {item.is_direct ? '👤 Direct' : '🔗 Indirect'}
+                        {item.is_direct ? 'Direct' : 'Indirect'}
                       </span>
                     </td>
                     <td style={{ 
@@ -390,7 +390,7 @@ export default function ReferralProfile() {
                         }}
                         title="View Member Details"
                       >
-                        👁️ View
+                        View
                       </button>
                     </td>
                   </tr>

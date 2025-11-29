@@ -136,7 +136,7 @@ export default function Transactions() {
                 backgroundClip: 'text',
                 marginBottom: '4px'
               }}>
-                💼 All Transactions
+                All Transactions
               </h1>
               <p style={{ color: '#64748b', fontSize: '14px' }}>Complete transaction history</p>
             </div>
@@ -173,7 +173,7 @@ export default function Transactions() {
                 {transactions.length === 0 ? (
                   <tr>
                     <td colSpan={5} style={{ textAlign: 'center', padding: '60px 20px' }}>
-                      <div style={{ fontSize: '48px', marginBottom: '16px' }}>📊</div>
+                      <div style={{ fontSize: '48px', marginBottom: '16px' }}></div>
                       <p style={{ fontSize: '16px', color: '#64748b', fontWeight: 500 }}>
                         No transactions found.
                       </p>
@@ -201,8 +201,6 @@ export default function Transactions() {
                             color: 'white',
                             boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                           }}>
-                            {transactionType === 'deposit' ? '💰 ' : 
-                             transactionType === 'withdrawal' ? '💸 ' : '📈 '}
                             {transactionType ? transactionType.toUpperCase() : 'UNKNOWN'}
                           </span>
                         </td>

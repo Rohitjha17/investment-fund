@@ -360,16 +360,16 @@ export default function ReferralSheet() {
           </div>
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
             <button onClick={() => router.push('/dashboard')} className="btn btn-secondary">
-              🏠 Dashboard
+              Dashboard
             </button>
             <button onClick={() => router.push('/master-sheet')} className="btn btn-success">
-              📊 Master Sheet
+              Master Sheet
             </button>
             <button onClick={exportToExcel} className="btn btn-primary" style={{
               background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
               color: 'white'
             }}>
-              📥 Download Excel
+              Download Excel
             </button>
           </div>
         </div>
@@ -377,7 +377,7 @@ export default function ReferralSheet() {
         {/* Month Selector */}
         <div className="card" style={{ marginBottom: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-            <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700 }}>📅 Select Month</h3>
+            <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700 }}>Select Month</h3>
             <input
               type="month"
               value={selectedMonth}
@@ -394,7 +394,7 @@ export default function ReferralSheet() {
             />
           </div>
           <p style={{ margin: '12px 0 0 0', color: '#64748b', fontSize: '14px' }}>
-            💡 Commission is calculated on <strong>Principal Amount</strong> (Total Deposits - Total Withdrawals) × Referral %
+            Commission is calculated on <strong>Principal Amount</strong> (Total Deposits - Total Withdrawals) × Referral %
           </p>
         </div>
 
@@ -416,7 +416,7 @@ export default function ReferralSheet() {
                   fontSize: '56px', 
                   opacity: 0.3,
                   filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.2))'
-                }}>🤝</div>
+                }}></div>
               </div>
             </div>
             
@@ -437,7 +437,7 @@ export default function ReferralSheet() {
                   fontSize: '56px', 
                   opacity: 0.3,
                   filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.2))'
-                }}>💰</div>
+                }}></div>
               </div>
             </div>
             
@@ -458,7 +458,7 @@ export default function ReferralSheet() {
                   fontSize: '56px', 
                   opacity: 0.3,
                   filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.2))'
-                }}>👥</div>
+                }}></div>
               </div>
             </div>
           </div>
@@ -476,7 +476,7 @@ export default function ReferralSheet() {
             }}>
               <div>
                 <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#1e293b' }}>
-                  📅 {referralData.period}
+                  {referralData.period}
                 </h2>
                 <p style={{ margin: '4px 0 0 0', color: '#64748b', fontSize: '14px' }}>
                   {formatDate(referralData.start_date)} - {formatDate(referralData.end_date)}
@@ -500,7 +500,7 @@ export default function ReferralSheet() {
         {/* Column Filter Section */}
         <div className="card" style={{ marginBottom: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '16px' }}>
-            <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700 }}>🔧 Column Filters</h3>
+            <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700 }}>Column Filters</h3>
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
               <button
                 onClick={() => setColumnFilters({
@@ -573,7 +573,7 @@ export default function ReferralSheet() {
                   fontWeight: 600,
                   color: columnFilters[key as keyof typeof columnFilters] ? '#dc2626' : '#0369a1'
                 }}>
-                  {columnFilters[key as keyof typeof columnFilters] ? '🚫' : '✅'} {label}
+                  {label}
                 </span>
               </label>
             ))}
@@ -614,7 +614,7 @@ export default function ReferralSheet() {
                 {currentData.length === 0 ? (
                   <tr>
                     <td colSpan={Object.values(columnFilters).filter(v => !v).length || 1} style={{ textAlign: 'center', padding: '60px 20px' }}>
-                      <div style={{ fontSize: '48px', marginBottom: '16px' }}>📊</div>
+                      <div style={{ fontSize: '48px', marginBottom: '16px' }}></div>
                       <p style={{ fontSize: '16px', color: '#64748b', fontWeight: 500 }}>
                         No referral data found for {referralData?.period || 'this month'}.
                       </p>
@@ -623,7 +623,7 @@ export default function ReferralSheet() {
                 ) : Object.values(columnFilters).every(v => v) ? (
                   <tr>
                     <td colSpan={1} style={{ textAlign: 'center', padding: '60px 20px' }}>
-                      <div style={{ fontSize: '48px', marginBottom: '16px' }}>👻</div>
+                      <div style={{ fontSize: '48px', marginBottom: '16px' }}></div>
                       <p style={{ fontSize: '16px', color: '#64748b', fontWeight: 500 }}>
                         All columns are hidden. Uncheck some filters to show data.
                       </p>
@@ -714,7 +714,7 @@ export default function ReferralSheet() {
                             fontWeight: 600,
                             border: `1px solid ${item.is_direct ? '#bbf7d0' : '#fbbf24'}`
                           }}>
-                            {item.is_direct ? '🎯 Direct' : '🔗 Indirect'}
+                            {item.is_direct ? 'Direct' : 'Indirect'}
                           </span>
                         </td>
                       )}

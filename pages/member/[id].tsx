@@ -204,7 +204,7 @@ export default function MemberDetail() {
       }}>
         <div style={{
           fontSize: '48px'
-        }}>⚠️</div>
+        }}></div>
         <h1 style={{ fontSize: '24px', fontWeight: 700, margin: 0 }}>Unable to load member</h1>
         <p style={{ color: '#64748b', maxWidth: '480px' }}>
           {memberError || 'An unexpected error occurred while loading this member. Please try again later.'}
@@ -260,10 +260,10 @@ export default function MemberDetail() {
           </div>
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
             <button onClick={() => setShowDepositModal(true)} className="btn btn-success">
-              💰 Add Deposit
+              Add Deposit
             </button>
             <button onClick={() => setShowWithdrawalModal(true)} className="btn btn-danger">
-              💸 Add Withdrawal
+              Add Withdrawal
             </button>
           </div>
         </div>
@@ -317,7 +317,7 @@ export default function MemberDetail() {
             color: 'white',
             border: 'none'
           }}>
-            <h3 style={{ color: 'white', marginBottom: '20px', fontSize: '20px', fontWeight: 700 }}>📊 Financial Summary</h3>
+            <h3 style={{ color: 'white', marginBottom: '20px', fontSize: '20px', fontWeight: 700 }}>Financial Summary</h3>
             <div style={{ display: 'grid', gap: '12px', marginBottom: '20px' }}>
               <div style={{ 
                 background: 'rgba(255,255,255,0.15)', 
@@ -367,7 +367,7 @@ export default function MemberDetail() {
         </div>
 
         <div className="card">
-          <h2 style={{ marginBottom: '20px', fontSize: '24px', fontWeight: 700 }}>💰 Deposits</h2>
+          <h2 style={{ marginBottom: '20px', fontSize: '24px', fontWeight: 700 }}>Deposits</h2>
           {member.deposits.length === 0 ? (
             <p style={{ color: '#64748b', textAlign: 'center', padding: '40px' }}>No deposits found.</p>
           ) : (
@@ -434,7 +434,7 @@ export default function MemberDetail() {
         </div>
 
         <div className="card">
-          <h2 style={{ marginBottom: '20px', fontSize: '24px', fontWeight: 700 }}>💸 Withdrawals</h2>
+          <h2 style={{ marginBottom: '20px', fontSize: '24px', fontWeight: 700 }}>Withdrawals</h2>
           {member.withdrawals.length === 0 ? (
             <p style={{ color: '#64748b', textAlign: 'center', padding: '40px' }}>No withdrawals found.</p>
           ) : (
@@ -484,7 +484,7 @@ export default function MemberDetail() {
                   border: '1px solid #bfdbfe'
                 }}>
                   <p style={{ margin: 0, fontSize: '13px', color: '#1e40af', lineHeight: '1.6' }}>
-                    <strong>ℹ️ How it works:</strong><br/>
+                    <strong>How it works:</strong><br/>
                     • Interest starts from <strong>next day</strong> after deposit<br/>
                     • Returns calculated automatically on <strong>2nd of every month</strong><br/>
                     • Custom rate applies only to this deposit

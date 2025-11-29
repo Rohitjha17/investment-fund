@@ -534,7 +534,7 @@ export default function MasterSheet() {
                 backgroundClip: 'text',
                 marginBottom: '4px'
               }}>
-                📊 Master Sheet
+                Master Sheet
               </h1>
               <p style={{ color: '#64748b', fontSize: '14px' }}>Returns Details - All Members Monthly Returns</p>
             </div>
@@ -544,7 +544,7 @@ export default function MasterSheet() {
         {/* Month Selector and Excel Export */}
         <div className="card" style={{ marginBottom: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '16px' }}>
-            <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700 }}>📅 Select Month</h3>
+            <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700 }}>Select Month</h3>
             <button
               onClick={exportToExcel}
               className="btn btn-success"
@@ -564,7 +564,7 @@ export default function MasterSheet() {
               }}
               disabled={transactions.length === 0}
             >
-              📥 Download Filtered Excel
+              Download Filtered Excel
             </button>
           </div>
           
@@ -614,7 +614,7 @@ export default function MasterSheet() {
         {/* Column Filter Section */}
         <div className="card" style={{ marginBottom: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '16px' }}>
-            <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700 }}>🔧 Column Filters</h3>
+            <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700 }}>Column Filters</h3>
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
               <button
                 onClick={() => setColumnFilters({
@@ -685,7 +685,7 @@ export default function MasterSheet() {
                   fontWeight: 600,
                   color: columnFilters[key as keyof typeof columnFilters] ? '#dc2626' : '#0369a1'
                 }}>
-                  {columnFilters[key as keyof typeof columnFilters] ? '🚫' : '✅'} {label}
+                  {label}
                 </span>
               </label>
             ))}
@@ -704,7 +704,7 @@ export default function MasterSheet() {
               color: '#92400e', 
               fontWeight: 600 
             }}>
-              💡 <strong>Filter Logic:</strong> Checked = Hide column, Unchecked = Show column. 
+              <strong>Filter Logic:</strong> Checked = Hide column, Unchecked = Show column. 
               Downloads will only include visible columns.
             </p>
           </div>
@@ -765,7 +765,7 @@ export default function MasterSheet() {
                 ) : Object.values(columnFilters).every(v => v) ? (
                   <tr>
                     <td colSpan={1} style={{ textAlign: 'center', padding: '60px 20px' }}>
-                      <div style={{ fontSize: '48px', marginBottom: '16px' }}>👻</div>
+                      <div style={{ fontSize: '48px', marginBottom: '16px' }}></div>
                       <p style={{ fontSize: '16px', color: '#64748b', fontWeight: 500 }}>
                         All columns are hidden. Uncheck some filters to show data.
                       </p>

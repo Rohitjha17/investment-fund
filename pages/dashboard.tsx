@@ -501,25 +501,25 @@ export default function Dashboard() {
           </div>
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
             <button onClick={() => router.push('/master-sheet')} className="btn btn-success">
-              📊 Master Sheet
+              Master Sheet
             </button>
             <button onClick={() => router.push('/referral-sheet')} className="btn btn-primary" style={{
               background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
               color: 'white'
             }}>
-              🤝 Referral Sheet
+              Referral Sheet
             </button>
             <button onClick={() => router.push('/transactions')} className="btn btn-primary" style={{
               background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
               color: 'white'
             }}>
-              💼 Transactions
+              Transactions
             </button>
             <button onClick={handleAdd} className="btn btn-primary">
-              ➕ Add Member
+              Add Member
             </button>
             <button onClick={handleLogout} className="btn btn-secondary">
-              🚪 Logout
+              Logout
             </button>
           </div>
         </div>
@@ -542,7 +542,7 @@ export default function Dashboard() {
                   fontSize: '56px', 
                   opacity: 0.3,
                   filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.2))'
-                }}>👥</div>
+                }}></div>
               </div>
             </div>
             
@@ -563,7 +563,7 @@ export default function Dashboard() {
                   fontSize: '56px', 
                   opacity: 0.3,
                   filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.2))'
-                }}>💰</div>
+                }}></div>
               </div>
             </div>
             
@@ -584,7 +584,7 @@ export default function Dashboard() {
                   fontSize: '56px', 
                   opacity: 0.3,
                   filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.2))'
-                }}>💸</div>
+                }}></div>
               </div>
             </div>
             
@@ -605,7 +605,7 @@ export default function Dashboard() {
                   fontSize: '56px', 
                   opacity: 0.3,
                   filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.2))'
-                }}>💵</div>
+                }}></div>
               </div>
             </div>
             
@@ -626,7 +626,7 @@ export default function Dashboard() {
                   fontSize: '56px', 
                   opacity: 0.3,
                   filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.2))'
-                }}>🤝</div>
+                }}></div>
               </div>
             </div>
           </div>
@@ -636,7 +636,7 @@ export default function Dashboard() {
         {/* Search Card */}
         <div className="card" style={{ marginBottom: '24px' }}>
           <h2 style={{ marginBottom: '16px', fontSize: '20px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            🔍 Search Members
+            Search Members
           </h2>
           <input
             type="text"
@@ -668,7 +668,7 @@ export default function Dashboard() {
         {/* Column Filter Section */}
         <div className="card" style={{ marginBottom: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '16px' }}>
-            <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700 }}>🔧 Column Filters</h3>
+            <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700 }}>Column Filters</h3>
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
               <button
                 onClick={() => setColumnFilters({
@@ -742,7 +742,7 @@ export default function Dashboard() {
                   fontWeight: 600,
                   color: columnFilters[key as keyof typeof columnFilters] ? '#dc2626' : '#0369a1'
                 }}>
-                  {columnFilters[key as keyof typeof columnFilters] ? '🚫' : '✅'} {label}
+                  {label}
                 </span>
               </label>
             ))}
@@ -761,7 +761,7 @@ export default function Dashboard() {
               color: '#92400e', 
               fontWeight: 600 
             }}>
-              💡 <strong>Filter Logic:</strong> Checked = Hide column, Unchecked = Show column. 
+              <strong>Filter Logic:</strong> Checked = Hide column, Unchecked = Show column. 
               If all columns are checked, table will be empty.
             </p>
           </div>
@@ -801,7 +801,7 @@ export default function Dashboard() {
                 {currentMembers.length === 0 ? (
                   <tr>
                     <td colSpan={Object.values(columnFilters).filter(v => !v).length || 1} style={{ textAlign: 'center', padding: '60px 20px' }}>
-                      <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔍</div>
+                      <div style={{ fontSize: '48px', marginBottom: '16px' }}></div>
                       <p style={{ fontSize: '16px', color: '#64748b', fontWeight: 500 }}>
                         {searchQuery ? 'No members found matching your search.' : 'No members found. Click "Add Member" to add one.'}
                       </p>
@@ -810,7 +810,7 @@ export default function Dashboard() {
                 ) : Object.values(columnFilters).every(v => v) ? (
                   <tr>
                     <td colSpan={1} style={{ textAlign: 'center', padding: '60px 20px' }}>
-                      <div style={{ fontSize: '48px', marginBottom: '16px' }}>👻</div>
+                      <div style={{ fontSize: '48px', marginBottom: '16px' }}></div>
                       <p style={{ fontSize: '16px', color: '#64748b', fontWeight: 500 }}>
                         All columns are hidden. Uncheck some filters to show data.
                       </p>
@@ -908,7 +908,7 @@ export default function Dashboard() {
                               style={{ padding: '8px 16px', fontSize: '13px' }}
                               title="View Details"
                             >
-                              👁️ View
+                              View
                             </button>
                             <button 
                               onClick={() => handleEdit(member)}
@@ -916,7 +916,7 @@ export default function Dashboard() {
                               style={{ padding: '8px 16px', fontSize: '13px' }}
                               title="Edit Member"
                             >
-                              ✏️ Edit
+                              Edit
                             </button>
                             <button 
                               onClick={() => handleDelete(member.id)}
@@ -924,7 +924,7 @@ export default function Dashboard() {
                               style={{ padding: '8px 16px', fontSize: '13px' }}
                               title="Delete Member"
                             >
-                              🗑️ Delete
+                              Delete
                             </button>
                           </div>
                         </td>
@@ -1034,7 +1034,7 @@ export default function Dashboard() {
                     alignItems: 'center',
                     gap: '8px'
                   }}>
-                    💰 {editingMember ? 'Deposit Details (Edit)' : 'Initial Deposit Details'}
+                    {editingMember ? 'Deposit Details (Edit)' : 'Initial Deposit Details'}
                   </h3>
 
                   <div className="form-group" style={{ marginBottom: '16px' }}>
