@@ -66,7 +66,14 @@ export default function ReferralSheet() {
   const fetchReferralData = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/referral-commissions?month=${selectedMonth}`);
+      // Add cache-busting parameter
+      const url = `/api/referral-commissions?month=${selectedMonth}&_t=${Date.now()}`;
+      const res = await fetch(url, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache'
+        }
+      });
       const data = await res.json();
       
       if (res.ok) {

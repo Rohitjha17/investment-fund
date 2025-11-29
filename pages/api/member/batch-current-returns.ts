@@ -133,6 +133,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       results[memberId] = Math.round(returnAmount * 100) / 100;
     }
 
+    // Set no-cache headers to prevent caching
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    
     return res.status(200).json({
       current_returns: results
     });

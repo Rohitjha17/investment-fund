@@ -41,30 +41,79 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           notes: w.notes,
           created_at: w.created_at
         })),
-        ...(await Promise.all(returns.map(async (r: any) => {
-          // Always fetch latest member details to ensure data is up-to-date
-          const memberId = parseInt(r.member_id) || r.member_id;
-          let member = await db.getMember(parseInt(memberId));
+        ...(await (async () => {
+          // OPTIMIZED: Fetch all unique members in parallel instead of sequentially
+          const uniqueMemberIds = [...new Set(returns.map((r: any) => parseInt(r.member_id) || r.member_id))];
+          const membersMap = new Map();
           
-          // If member not found with parsed ID, try with original ID
-          if (!member && memberId !== parseInt(memberId)) {
-            member = await db.getMember(memberId);
-          }
+          // Fetch all members in parallel
+          await Promise.all(uniqueMemberIds.map(async (memberId) => {
+            try {
+              const member = await db.getMember(memberId);
+              if (member) {
+                membersMap.set(memberId, member);
+              }
+            } catch (error) {
+              console.error(`Error fetching member ${memberId}:`, error);
+            }
+          }));
           
-          // If still no member, return basic info from return record
-          if (!member) {
+          // Map returns to transactions using cached members
+          return returns.map((r: any) => {
+            const memberId = parseInt(r.member_id) || r.member_id;
+            const member = membersMap.get(memberId);
+            
+            // If member not found, return basic info from return record
+            if (!member) {
+              return {
+                id: r.id,
+                type: 'return',
+                transaction_type: 'return',
+                member_id: memberId,
+                member_name: r.member_name || 'Unknown',
+                alias_name: null,
+                unique_number: null,
+                village: null,
+                town: null,
+                percentage_of_return: null,
+                deposits: [],
+                amount: r.return_amount,
+                date: r.return_date,
+                percentage: null,
+                interest_days: r.interest_days,
+                notes: r.notes,
+                created_at: r.created_at
+              };
+            }
+            
+            // Get current deposits (always fetch latest)
+            const memberDeposits = member.deposits || [];
+            
+            // Ensure we have valid deposits data with all details
+            const memberPercentage = (member as any)?.percentage_of_return || 0;
+            const depositsData = memberDeposits.length > 0 ? memberDeposits.map((d: any) => ({
+              id: parseInt(d.id) || d.id,
+              amount: parseFloat(d.amount) || 0,
+              deposit_date: d.deposit_date || '',
+              percentage: d.percentage !== null && d.percentage !== undefined 
+                ? parseFloat(d.percentage) 
+                : memberPercentage,
+              notes: d.notes || null
+            })) : [];
+            
+            // Return with latest member details
             return {
               id: r.id,
               type: 'return',
               transaction_type: 'return',
               member_id: memberId,
-              member_name: r.member_name || 'Unknown',
-              alias_name: null,
-              unique_number: null,
-              village: null,
-              town: null,
-              percentage_of_return: null,
-              deposits: [],
+              member_name: (member as any).name || r.member_name || '',
+              alias_name: (member as any).alias_name || null,
+              unique_number: (member as any).unique_number || null,
+              village: (member as any).village || null,
+              town: (member as any).town || null,
+              percentage_of_return: (member as any).percentage_of_return || null,
+              deposits: depositsData,
               amount: r.return_amount,
               date: r.return_date,
               percentage: null,
@@ -72,45 +121,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               notes: r.notes,
               created_at: r.created_at
             };
-          }
-          
-          // Get current deposits (always fetch latest)
-          const memberDeposits = member.deposits || [];
-          
-          // Ensure we have valid deposits data with all details
-          const memberPercentage = (member as any)?.percentage_of_return || 0;
-          const depositsData = memberDeposits.length > 0 ? memberDeposits.map((d: any) => ({
-            id: parseInt(d.id) || d.id,
-            amount: parseFloat(d.amount) || 0,
-            deposit_date: d.deposit_date || '',
-            percentage: d.percentage !== null && d.percentage !== undefined 
-              ? parseFloat(d.percentage) 
-              : memberPercentage,
-            notes: d.notes || null
-          })) : [];
-          
-          // Return with latest member details
-          return {
-            id: r.id,
-            type: 'return',
-            transaction_type: 'return',
-            member_id: memberId,
-            member_name: (member as any).name || r.member_name || '',
-            alias_name: (member as any).alias_name || null,
-            unique_number: (member as any).unique_number || null,
-            village: (member as any).village || null,
-            town: (member as any).town || null,
-            percentage_of_return: (member as any).percentage_of_return || null,
-            deposits: depositsData,
-            amount: r.return_amount,
-            date: r.return_date,
-            percentage: null,
-            interest_days: r.interest_days,
-            notes: r.notes,
-            created_at: r.created_at,
-            last_updated: new Date().toISOString() // Track when data was fetched
-          };
-        })))
+          });
+        })())
       ];
 
       // Filter by member_id if provided
@@ -134,6 +146,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // Sort by date (newest first)
       filteredTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      // Set no-cache headers to prevent caching
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
 
       return res.status(200).json(filteredTransactions);
     } catch (error) {

@@ -90,6 +90,7 @@ export default function MasterSheet() {
 
   const fetchTransactions = async () => {
     try {
+      setLoading(true);
       // Calculate date range from selected month
       const [year, month] = selectedMonth.split('-');
       const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
@@ -102,7 +103,15 @@ export default function MasterSheet() {
       // Always use selected month for date filtering
       url += `start_date=${startDate.toISOString().split('T')[0]}&end_date=${endDate.toISOString().split('T')[0]}`;
       
-      const res = await fetch(url);
+      // Add cache-busting parameter
+      url += `&_t=${Date.now()}`;
+      
+      const res = await fetch(url, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache'
+        }
+      });
       const data = await res.json();
       
       // Master sheet shows only returns
@@ -125,39 +134,45 @@ export default function MasterSheet() {
             ? membersData.filter((m: any) => m.id === parseInt(selectedMember))
             : membersData;
           
-          // Create dynamic return entries
-          filteredData = await Promise.all(membersToShow.map(async (member: any) => {
-            // Get member details with deposits
-            const memberRes = await fetch(`/api/members/${member.id}`);
-            const memberData = await memberRes.json();
-            
-            // Calculate current returns for this member
-            const returnsRes = await fetch('/api/member/current-returns', {
+          // OPTIMIZED: Use batch endpoints instead of individual API calls
+          const memberIds = membersToShow.map((m: any) => m.id);
+          
+          // Fetch all member details and returns in parallel
+          const [membersDetails, returnsData] = await Promise.all([
+            Promise.all(memberIds.map(id => 
+              fetch(`/api/members/${id}`).then(res => res.json())
+            )),
+            fetch('/api/member/batch-current-returns', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ member_id: member.id })
-            });
-            const returnsData = await returnsRes.json();
+              body: JSON.stringify({ member_ids: memberIds })
+            }).then(res => res.json()).then(data => data.current_returns || {})
+          ]);
+          
+          // Create dynamic return entries
+          filteredData = membersToShow.map((member: any, index: number) => {
+            const memberData = membersDetails[index];
+            const currentReturn = returnsData[member.id] || 0;
             
             return {
               id: `dynamic-${member.id}`,
               type: 'return',
               transaction_type: 'return',
               member_id: member.id,
-              member_name: memberData.name,
-              alias_name: memberData.alias_name,
-              unique_number: memberData.unique_number,
-              village: memberData.village,
-              town: memberData.town,
-              percentage_of_return: memberData.percentage_of_return,
-              deposits: memberData.deposits || [],
-              amount: returnsData.current_return || 0,
+              member_name: memberData?.name || member.name,
+              alias_name: memberData?.alias_name || member.alias_name,
+              unique_number: memberData?.unique_number || member.unique_number,
+              village: memberData?.village || member.village,
+              town: memberData?.town || member.town,
+              percentage_of_return: memberData?.percentage_of_return || member.percentage_of_return,
+              deposits: memberData?.deposits || [],
+              amount: currentReturn,
               date: endDate.toISOString().split('T')[0], // Use end of month
-              interest_days: returnsData.interest_days || 30,
-              notes: returnsData.period_info || 'Calculated dynamically',
+              interest_days: 30,
+              notes: 'Calculated dynamically',
               is_dynamic: true
             };
-          }));
+          });
         }
       }
       
@@ -169,6 +184,11 @@ export default function MasterSheet() {
       });
       
       setTransactions(sortedData);
+    } catch (error) {
+      console.error('Error fetching transactions:', error);
+    } finally {
+      setLoading(false);
+    }
     } catch (error) {
       console.error('Error fetching transactions:', error);
     } finally {

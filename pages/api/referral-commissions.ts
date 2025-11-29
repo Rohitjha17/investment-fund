@@ -78,11 +78,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       (m as any).referral_name && (m as any).referral_percent > 0
     );
 
+    // OPTIMIZED: Fetch all members in parallel instead of sequentially
+    const memberIds = membersWithReferrals.map(m => parseInt(m.id.toString()));
+    const fullMembers = await Promise.all(
+      memberIds.map(id => db.getMember(id))
+    );
+
     // Process each member to calculate referral commissions
-    for (const member of membersWithReferrals) {
-      const memberId = parseInt(member.id.toString());
-      // Only fetch full member data when needed (has referral)
-      const fullMember = await db.getMember(memberId);
+    for (let i = 0; i < fullMembers.length; i++) {
+      const fullMember = fullMembers[i];
       if (!fullMember) continue;
 
       const referralName = (fullMember as any).referral_name;
@@ -128,7 +132,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       referralCommissions[normalizedRootReferrer].total_commission += commissionAmount;
       referralCommissions[normalizedRootReferrer].referred_count += 1;
       referralCommissions[normalizedRootReferrer].breakdown.push({
-        member_id: memberId,
+        member_id: memberIds[i],
         member_name: (fullMember as any).name,
         principal_amount: principalAmount,
         referral_percent: referralPercent,
@@ -154,6 +158,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                        'July', 'August', 'September', 'October', 'November', 'December'];
     const periodName = `${monthNames[startDate.getMonth()]} ${startDate.getFullYear()}`;
 
+    // Set no-cache headers to prevent caching
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    
     return res.status(200).json({
       period: periodName,
       start_date: startDate.toISOString(),
