@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Image from 'next/image';
@@ -31,11 +31,13 @@ export default function Dashboard() {
   const [filteredMembers, setFilteredMembers] = useState<Member[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [currentReturns, setCurrentReturns] = useState<Record<number, number>>({});
   const [referralCommissions, setReferralCommissions] = useState<Record<string, number>>({});
   const [totalReferralCommissions, setTotalReferralCommissions] = useState<number>(0);
+  const searchDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(15);
   const [columnFilters, setColumnFilters] = useState({
@@ -65,7 +67,8 @@ export default function Dashboard() {
   useEffect(() => {
     checkAuth();
     fetchMembers();
-    fetchReferralCommissions();
+    // Fetch referral commissions in background (non-blocking)
+    fetchReferralCommissions().catch(console.error);
   }, []);
 
   // Removed checkAndCalculateMonthlyReturns - it should only run on 2nd of month, not on every page load
@@ -79,50 +82,54 @@ export default function Dashboard() {
     }
   };
 
-  const fetchMembers = async () => {
+  const fetchMembers = useCallback(async () => {
     try {
-      const res = await fetch('/api/members');
-      const data = await res.json();
+      const membersRes = await fetch('/api/members');
+      const data = await membersRes.json();
       setMembers(data);
       setFilteredMembers(data);
       
-      // OPTIMIZED: Use batch endpoint instead of N+1 queries
+      // OPTIMIZED: Fetch returns in parallel after getting members
       if (data.length > 0) {
-        try {
-          const memberIds = data.map((m: Member) => m.id);
-          const returnsRes = await fetch('/api/member/batch-current-returns', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ member_ids: memberIds })
-          });
-          const returnsData = await returnsRes.json();
-          if (returnsRes.ok && returnsData.current_returns) {
+        const memberIds = data.map((m: Member) => m.id);
+        // Fetch returns in background (non-blocking)
+        fetch('/api/member/batch-current-returns', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ member_ids: memberIds })
+        })
+        .then(res => res.json())
+        .then(returnsData => {
+          if (returnsData.current_returns) {
             setCurrentReturns(returnsData.current_returns);
           }
-        } catch (error) {
+        })
+        .catch(error => {
           console.error('Error fetching batch returns:', error);
-        }
+        });
       }
     } catch (error) {
       console.error('Error fetching members:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchReferralCommissions = async () => {
+  const fetchReferralCommissions = useCallback(async () => {
     try {
       const res = await fetch('/api/referral-commissions');
       const data = await res.json();
       
-      if (res.ok) {
+      if (res.ok && data.referral_commissions) {
         // Create a map of referrer name to total commission
         const commissionMap: Record<string, number> = {};
         let totalCommissions = 0;
         
         data.referral_commissions.forEach((item: any) => {
-          commissionMap[item.referrer_name.toLowerCase()] = item.total_commission;
-          totalCommissions += item.total_commission;
+          if (item.referrer_name && item.total_commission) {
+            commissionMap[item.referrer_name.toLowerCase()] = item.total_commission;
+            totalCommissions += item.total_commission;
+          }
         });
         
         setReferralCommissions(commissionMap);
@@ -131,24 +138,43 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Error fetching referral commissions:', error);
     }
-  };
+  }, []);
 
-  const handleSearch = async (query: string) => {
+  // Debounced search for better performance
+  const handleSearch = useCallback((query: string) => {
     setSearchQuery(query);
+    
+    // Clear previous timer
+    if (searchDebounceTimerRef.current) {
+      clearTimeout(searchDebounceTimerRef.current);
+    }
+    
     if (!query.trim()) {
       setFilteredMembers(members);
       return;
     }
     
-    try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
-      const data = await res.json();
-      setFilteredMembers(data);
-    } catch (error) {
-      console.error('Error searching:', error);
-      setFilteredMembers(members);
-    }
-  };
+    // Debounce search API call
+    searchDebounceTimerRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        setFilteredMembers(data);
+      } catch (error) {
+        console.error('Error searching:', error);
+        setFilteredMembers(members);
+      }
+    }, 300); // 300ms debounce
+  }, [members]);
+  
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (searchDebounceTimerRef.current) {
+        clearTimeout(searchDebounceTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -174,6 +200,13 @@ export default function Dashboard() {
 
   const handleEdit = (member: Member) => {
     setEditingMember(member);
+    // Get first deposit if exists
+    const firstDeposit = member.deposits && member.deposits.length > 0 
+      ? member.deposits.sort((a: any, b: any) => 
+          new Date(a.deposit_date).getTime() - new Date(b.deposit_date).getTime()
+        )[0]
+      : null;
+    
     setFormData({
       name: member.name,
       alias_name: member.alias_name || '',
@@ -182,8 +215,8 @@ export default function Dashboard() {
       percentage_of_return: member.percentage_of_return.toString(),
       referral_name: member.referral_name || '',
       referral_percent: member.referral_percent.toString(),
-      deposit_amount: '',
-      investment_date: '',
+      deposit_amount: firstDeposit ? firstDeposit.amount.toString() : '',
+      investment_date: firstDeposit ? firstDeposit.deposit_date.split('T')[0] : '',
       mode_of_payment: ''
     });
     setShowAddModal(true);
@@ -206,6 +239,10 @@ export default function Dashboard() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Prevent multiple submissions
+    if (submitting) return;
+    setSubmitting(true);
+    
     try {
       const url = editingMember 
         ? `/api/members/${editingMember.id}`
@@ -221,29 +258,64 @@ export default function Dashboard() {
 
       if (res.ok) {
         setShowAddModal(false);
-        fetchMembers();
+        setSubmitting(false);
+        // Reset form
+        setFormData({
+          name: '',
+          alias_name: '',
+          village: '',
+          town: '',
+          percentage_of_return: '',
+          referral_name: '',
+          referral_percent: '',
+          deposit_amount: '',
+          investment_date: '',
+          mode_of_payment: ''
+        });
+        // Refresh data in parallel
+        await Promise.all([
+          fetchMembers(),
+          fetchReferralCommissions()
+        ]);
       } else {
-        alert('Failed to save member');
+        const errorData = await res.json();
+        alert(errorData.error || 'Failed to save member');
+        setSubmitting(false);
       }
     } catch (error) {
       console.error('Error saving member:', error);
       alert('Failed to save member');
+      setSubmitting(false);
     }
   };
 
-  const formatCurrency = (amount: number) => {
+  // Memoized currency formatter for better performance
+  const formatCurrency = useCallback((amount: number) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
       maximumFractionDigits: 0
     }).format(amount);
-  };
+  }, []);
+  
+  // Memoized stats calculations
+  const statsData = useMemo(() => {
+    const totalDeposits = members.reduce((sum, m) => sum + m.total_deposits, 0);
+    const totalWithdrawals = members.reduce((sum, m) => sum + m.total_withdrawals, 0);
+    const currentBalance = totalDeposits - totalWithdrawals;
+    return { totalDeposits, totalWithdrawals, currentBalance };
+  }, [members]);
 
-  // Pagination logic
-  const totalPages = Math.ceil(filteredMembers.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentMembers = filteredMembers.slice(startIndex, endIndex);
+  // Memoized pagination logic for better performance
+  const paginationData = useMemo(() => {
+    const totalPages = Math.ceil(filteredMembers.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const currentMembers = filteredMembers.slice(startIndex, endIndex);
+    return { totalPages, currentMembers };
+  }, [filteredMembers, currentPage, itemsPerPage]);
+  
+  const { totalPages, currentMembers } = paginationData;
 
   const renderPagination = () => {
     if (totalPages <= 1) return null;
@@ -484,7 +556,7 @@ export default function Dashboard() {
                 <div>
                   <p style={{ fontSize: '14px', opacity: 0.9, marginBottom: '8px', fontWeight: 500 }}>Total Deposits</p>
                   <h3 style={{ fontSize: '28px', fontWeight: 800, margin: 0 }}>
-                    {formatCurrency(members.reduce((sum, m) => sum + m.total_deposits, 0))}
+                    {formatCurrency(statsData.totalDeposits)}
                   </h3>
                 </div>
                 <div style={{ 
@@ -505,7 +577,7 @@ export default function Dashboard() {
                 <div>
                   <p style={{ fontSize: '14px', opacity: 0.9, marginBottom: '8px', fontWeight: 500 }}>Total Withdrawals</p>
                   <h3 style={{ fontSize: '28px', fontWeight: 800, margin: 0 }}>
-                    {formatCurrency(members.reduce((sum, m) => sum + m.total_withdrawals, 0))}
+                    {formatCurrency(statsData.totalWithdrawals)}
                   </h3>
                 </div>
                 <div style={{ 
@@ -526,10 +598,7 @@ export default function Dashboard() {
                 <div>
                   <p style={{ fontSize: '14px', opacity: 0.9, marginBottom: '8px', fontWeight: 500 }}>Current Balance</p>
                   <h3 style={{ fontSize: '28px', fontWeight: 800, margin: 0 }}>
-                    {formatCurrency(
-                      members.reduce((sum, m) => sum + m.total_deposits, 0) - 
-                      members.reduce((sum, m) => sum + m.total_withdrawals, 0)
-                    )}
+                    {formatCurrency(statsData.currentBalance)}
                   </h3>
                 </div>
                 <div style={{ 
@@ -949,79 +1018,86 @@ export default function Dashboard() {
                   />
                 </div>
 
-                {!editingMember && (
-                  <>
-                    <div style={{
-                      marginTop: '24px',
-                      padding: '16px',
-                      background: '#eff6ff',
-                      borderRadius: '12px',
-                      border: '2px solid #3b82f6'
-                    }}>
-                      <h3 style={{ 
-                        margin: '0 0 16px 0', 
-                        fontSize: '16px', 
-                        fontWeight: 700, 
-                        color: '#1e40af',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px'
-                      }}>
-                        💰 Initial Deposit Details
-                      </h3>
+                <div style={{
+                  marginTop: '24px',
+                  padding: '16px',
+                  background: '#eff6ff',
+                  borderRadius: '12px',
+                  border: '2px solid #3b82f6'
+                }}>
+                  <h3 style={{ 
+                    margin: '0 0 16px 0', 
+                    fontSize: '16px', 
+                    fontWeight: 700, 
+                    color: '#1e40af',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    💰 {editingMember ? 'Deposit Details (Edit)' : 'Initial Deposit Details'}
+                  </h3>
 
-                      <div className="form-group" style={{ marginBottom: '16px' }}>
-                        <label>Deposit Amount *</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={formData.deposit_amount}
-                          onChange={(e) => setFormData({ ...formData, deposit_amount: e.target.value })}
-                          required
-                          placeholder="Enter deposit amount"
-                        />
-                      </div>
+                  <div className="form-group" style={{ marginBottom: '16px' }}>
+                    <label>Deposit Amount {!editingMember && '*'}</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={formData.deposit_amount}
+                      onChange={(e) => setFormData({ ...formData, deposit_amount: e.target.value })}
+                      required={!editingMember}
+                      placeholder="Enter deposit amount"
+                    />
+                  </div>
 
-                      <div className="form-group" style={{ marginBottom: '16px' }}>
-                        <label>Investment Date *</label>
-                        <input
-                          type="date"
-                          value={formData.investment_date}
-                          onChange={(e) => setFormData({ ...formData, investment_date: e.target.value })}
-                          required
-                          style={{ fontSize: '16px', padding: '12px' }}
-                        />
-                      </div>
+                  <div className="form-group" style={{ marginBottom: '16px' }}>
+                    <label>Investment Date {!editingMember && '*'}</label>
+                    <input
+                      type="date"
+                      value={formData.investment_date}
+                      onChange={(e) => setFormData({ ...formData, investment_date: e.target.value })}
+                      required={!editingMember}
+                      style={{ fontSize: '16px', padding: '12px' }}
+                    />
+                  </div>
 
-                      <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label>Mode of Payment *</label>
-                        <select
-                          value={formData.mode_of_payment}
-                          onChange={(e) => setFormData({ ...formData, mode_of_payment: e.target.value })}
-                          required
-                          style={{ fontSize: '16px', padding: '12px' }}
-                        >
-                          <option value="">Select payment mode</option>
-                          <option value="Cash">Cash</option>
-                          <option value="Bank Transfer">Bank Transfer</option>
-                          <option value="UPI">UPI</option>
-                          <option value="Cheque">Cheque</option>
-                          <option value="Other">Other</option>
-                        </select>
-                      </div>
+                  {!editingMember && (
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label>Mode of Payment *</label>
+                      <select
+                        value={formData.mode_of_payment}
+                        onChange={(e) => setFormData({ ...formData, mode_of_payment: e.target.value })}
+                        required
+                        style={{ fontSize: '16px', padding: '12px' }}
+                      >
+                        <option value="">Select payment mode</option>
+                        <option value="Cash">Cash</option>
+                        <option value="Bank Transfer">Bank Transfer</option>
+                        <option value="UPI">UPI</option>
+                        <option value="Cheque">Cheque</option>
+                        <option value="Other">Other</option>
+                      </select>
                     </div>
-                  </>
-                )}
+                  )}
+                </div>
 
                 <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
-                    {editingMember ? 'Update' : 'Add'}
+                  <button 
+                    type="submit" 
+                    className="btn btn-primary" 
+                    style={{ flex: 1 }}
+                    disabled={submitting}
+                  >
+                    {submitting ? 'Saving...' : (editingMember ? 'Update' : 'Add')}
                   </button>
                   <button 
                     type="button" 
                     className="btn btn-secondary" 
                     style={{ flex: 1 }}
-                    onClick={() => setShowAddModal(false)}
+                    onClick={() => {
+                      setShowAddModal(false);
+                      setSubmitting(false);
+                    }}
+                    disabled={submitting}
                   >
                     Cancel
                   </button>

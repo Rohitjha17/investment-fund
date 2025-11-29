@@ -37,7 +37,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         percentage_of_return,
         date_of_return,
         referral_name,
-        referral_percent
+        referral_percent,
+        deposit_amount,
+        investment_date
       } = req.body;
 
       // Check for duplicate names and aliases (excluding current member)
@@ -84,6 +86,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       if (!success) {
         return res.status(404).json({ error: 'Member not found' });
+      }
+
+      // Handle deposit update if provided
+      if (deposit_amount && investment_date) {
+        const member = await db.getMember(memberId);
+        if (member && member.deposits && member.deposits.length > 0) {
+          // Update first deposit
+          const firstDeposit = member.deposits.sort((a: any, b: any) => 
+            new Date(a.deposit_date).getTime() - new Date(b.deposit_date).getTime()
+          )[0];
+          
+          await db.updateDeposit(firstDeposit.id, {
+            member_id: memberId,
+            amount: deposit_amount,
+            deposit_date: investment_date,
+            percentage: null
+          });
+        } else {
+          // Create new deposit if none exists
+          await db.createDeposit({
+            member_id: memberId,
+            amount: deposit_amount,
+            deposit_date: investment_date,
+            percentage: null,
+            notes: 'Initial deposit'
+          });
+        }
       }
 
       return res.status(200).json({ success: true });
