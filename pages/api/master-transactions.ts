@@ -43,7 +43,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         })),
         ...(await (async () => {
           // OPTIMIZED: Fetch all unique members in parallel instead of sequentially
-          const uniqueMemberIds = [...new Set(returns.map((r: any) => parseInt(r.member_id) || r.member_id))];
+          const uniqueMemberIds = Array.from(new Set(returns.map((r: any) => parseInt(r.member_id) || r.member_id)));
           const membersMap = new Map();
           
           // Fetch all members in parallel
