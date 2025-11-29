@@ -189,11 +189,6 @@ export default function MasterSheet() {
     } finally {
       setLoading(false);
     }
-    } catch (error) {
-      console.error('Error fetching transactions:', error);
-    } finally {
-      setLoading(false);
-    }
   };
 
   const handleCalculateMonthlyReturns = async () => {
