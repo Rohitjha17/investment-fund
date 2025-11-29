@@ -38,12 +38,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     for (const member of members) {
       if (!member) continue;
 
+      const memberId = typeof member.id === 'number' ? member.id : parseInt(member.id.toString());
       const deposits = member.deposits || [];
       const withdrawals = member.withdrawals || [];
       const defaultPercentage = (member as any).percentage_of_return || 0;
 
       if (deposits.length === 0) {
-        results[member.id] = 0;
+        results[memberId] = 0;
         continue;
       }
 
@@ -129,7 +130,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       }
 
-      results[member.id] = Math.round(returnAmount * 100) / 100;
+      results[memberId] = Math.round(returnAmount * 100) / 100;
     }
 
     return res.status(200).json({
