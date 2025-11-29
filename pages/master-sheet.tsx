@@ -139,7 +139,7 @@ export default function MasterSheet() {
           
           // Fetch all member details and returns in parallel
           const [membersDetails, returnsData] = await Promise.all([
-            Promise.all(memberIds.map(id => 
+            Promise.all(memberIds.map((id: number) => 
               fetch(`/api/members/${id}`).then(res => res.json())
             )),
             fetch('/api/member/batch-current-returns', {
