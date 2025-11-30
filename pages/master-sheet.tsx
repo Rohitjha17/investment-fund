@@ -88,85 +88,113 @@ export default function MasterSheet() {
 
   // Removed checkAndCalculateMonthlyReturns - it should only run on 2nd of month, not on every page load
 
+  // Helper function to generate all months between two dates
+  const getAllMonthsBetween = (startDate: Date, endDate: Date): string[] => {
+    const months: string[] = [];
+    const current = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+    const end = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+    
+    while (current <= end) {
+      const year = current.getFullYear();
+      const month = String(current.getMonth() + 1).padStart(2, '0');
+      months.push(`${year}-${month}`);
+      current.setMonth(current.getMonth() + 1);
+    }
+    
+    return months;
+  };
+
   const fetchTransactions = async () => {
     try {
       setLoading(true);
       // Calculate date range from selected month (works for ANY month/year - even 10+ years back)
       const [year, month] = selectedMonth.split('-');
-      const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+      const selectedMonthDate = new Date(parseInt(year), parseInt(month) - 1, 1);
       // Get last day of the selected month (handles different month lengths correctly)
       const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
-      const endDate = new Date(parseInt(year), parseInt(month) - 1, lastDay, 23, 59, 59, 999);
+      const selectedMonthEndDate = new Date(parseInt(year), parseInt(month) - 1, lastDay, 23, 59, 59, 999);
       
-      let url = '/api/master-transactions?';
-      if (selectedMember) {
-        url += `member_id=${selectedMember}&`;
-      }
-      // Always use selected month for date filtering
-      url += `start_date=${startDate.toISOString().split('T')[0]}&end_date=${endDate.toISOString().split('T')[0]}`;
+      // Fetch all members to find earliest deposit dates
+      const membersRes = await fetch('/api/members');
+      const membersData = await membersRes.json();
       
-      // Add cache-busting parameter
-      url += `&_t=${Date.now()}`;
+      // Filter by selected member if needed
+      const membersToShow = selectedMember 
+        ? membersData.filter((m: any) => m.id === parseInt(selectedMember))
+        : membersData;
       
-      const res = await fetch(url, {
-        cache: 'no-store',
-        headers: {
-          'Cache-Control': 'no-cache'
+      // OPTIMIZED: Fetch all member details in parallel
+      const memberIds = membersToShow.map((m: any) => m.id);
+      const membersDetails = await Promise.all(
+        memberIds.map((id: number) => 
+          fetch(`/api/members/${id}`).then(res => res.json())
+        )
+      );
+      
+      // Collect all returns from deposit date to selected month for each member
+      const allReturns: any[] = [];
+      
+      for (let i = 0; i < membersToShow.length; i++) {
+        const member = membersToShow[i];
+        const memberData = membersDetails[i];
+        
+        if (!memberData || !memberData.deposits || memberData.deposits.length === 0) {
+          continue;
         }
-      });
-      const data = await res.json();
-      
-      // Master sheet shows only returns
-      let filteredData = data.filter((t: Transaction) => t.transaction_type === 'return');
-      
-      // If no returns found for selected month, calculate returns for that month
-      // This works for ANY month/year (past, present, or future)
-      if (filteredData.length === 0) {
-        // Fetch all members and calculate returns for the selected month
-        const membersRes = await fetch('/api/members');
-        const membersData = await membersRes.json();
         
-        // Filter by selected member if needed
-        const membersToShow = selectedMember 
-          ? membersData.filter((m: any) => m.id === parseInt(selectedMember))
-          : membersData;
+        // Find earliest deposit date for this member
+        const depositDates = memberData.deposits.map((d: any) => new Date(d.deposit_date));
+        const earliestDepositDate = new Date(Math.min(...depositDates.map((d: Date) => d.getTime())));
         
-        // OPTIMIZED: Fetch all member details in parallel
-        const memberIds = membersToShow.map((m: any) => m.id);
-        const membersDetails = await Promise.all(
-          memberIds.map((id: number) => 
-            fetch(`/api/members/${id}`).then(res => res.json())
-          )
-        );
+        // Generate all months from first deposit month to selected month
+        const firstDepositMonth = new Date(earliestDepositDate.getFullYear(), earliestDepositDate.getMonth(), 1);
+        const monthsToCalculate = getAllMonthsBetween(firstDepositMonth, selectedMonthDate);
         
-        // Calculate returns for the selected month using calculate-complex-interest API
-        const calculatedReturns = await Promise.all(
-          membersToShow.map(async (member: any, index: number) => {
-            const memberData = membersDetails[index];
-            if (!memberData || !memberData.deposits || memberData.deposits.length === 0) {
-              return null;
+        // For each month, fetch stored returns or calculate them
+        for (const monthKey of monthsToCalculate) {
+          const [monthYear, monthNum] = monthKey.split('-');
+          const monthStartDate = new Date(parseInt(monthYear), parseInt(monthNum) - 1, 1);
+          const monthLastDay = new Date(parseInt(monthYear), parseInt(monthNum), 0).getDate();
+          const monthEndDate = new Date(parseInt(monthYear), parseInt(monthNum) - 1, monthLastDay, 23, 59, 59, 999);
+          
+          // First, try to get stored return from database
+          let storedReturn = null;
+          try {
+            const storedRes = await fetch(`/api/master-transactions?member_id=${member.id}&start_date=${monthStartDate.toISOString().split('T')[0]}&end_date=${monthEndDate.toISOString().split('T')[0]}&_t=${Date.now()}`, {
+              cache: 'no-store'
+            });
+            const storedData = await storedRes.json();
+            const returns = storedData.filter((t: Transaction) => t.transaction_type === 'return');
+            if (returns.length > 0) {
+              storedReturn = returns[0]; // Use first stored return for this month
             }
-            
-            // Calculate interest for the selected month
+          } catch (error) {
+            console.error(`Error fetching stored return for member ${member.id}, month ${monthKey}:`, error);
+          }
+          
+          // If stored return exists, use it; otherwise calculate
+          if (storedReturn) {
+            allReturns.push({
+              ...storedReturn,
+              month_key: monthKey
+            });
+          } else {
+            // Calculate return for this month using same logic
             try {
               const calcRes = await fetch('/api/calculate-complex-interest', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   member_id: member.id,
-                  start_date: startDate.toISOString().split('T')[0],
-                  end_date: endDate.toISOString().split('T')[0]
+                  start_date: monthStartDate.toISOString().split('T')[0],
+                  end_date: monthEndDate.toISOString().split('T')[0]
                 })
               });
               const calcData = await calcRes.json();
               
               if (calcData.interest > 0) {
-                // Calculate interest days for the selected month
-                const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
-                const interestDays = lastDay; // Full month
-                
-                return {
-                  id: `calculated-${member.id}-${selectedMonth}`,
+                allReturns.push({
+                  id: `calculated-${member.id}-${monthKey}`,
                   type: 'return',
                   transaction_type: 'return',
                   member_id: member.id,
@@ -178,28 +206,29 @@ export default function MasterSheet() {
                   percentage_of_return: memberData.percentage_of_return || member.percentage_of_return,
                   deposits: memberData.deposits || [],
                   amount: calcData.interest,
-                  date: endDate.toISOString().split('T')[0],
-                  interest_days: interestDays,
-                  notes: `Calculated for ${selectedMonth}`,
-                  is_calculated: true
-                };
+                  date: monthEndDate.toISOString().split('T')[0],
+                  interest_days: monthLastDay,
+                  notes: `Calculated for ${monthKey}`,
+                  is_calculated: true,
+                  month_key: monthKey
+                });
               }
             } catch (error) {
-              console.error(`Error calculating return for member ${member.id}:`, error);
+              console.error(`Error calculating return for member ${member.id}, month ${monthKey}:`, error);
             }
-            return null;
-          })
-        );
-        
-        // Filter out null values
-        filteredData = calculatedReturns.filter((r: any) => r !== null);
+          }
+        }
       }
       
-      // Sort transactions alphabetically by member name
-      const sortedData = filteredData.sort((a: any, b: any) => {
+      // Sort by member name, then by date (oldest first for each member)
+      const sortedData = allReturns.sort((a: any, b: any) => {
         const nameA = (a.member_name || '').toLowerCase();
         const nameB = (b.member_name || '').toLowerCase();
-        return nameA.localeCompare(nameB);
+        if (nameA !== nameB) {
+          return nameA.localeCompare(nameB);
+        }
+        // Same member - sort by date
+        return new Date(a.date).getTime() - new Date(b.date).getTime();
       });
       
       setTransactions(sortedData);
@@ -753,6 +782,7 @@ export default function MasterSheet() {
               <thead>
                 <tr>
                   {!columnFilters.paymentDate && <th>Payment Date</th>}
+                  <th>Month</th>
                   {!columnFilters.memberDetails && <th>Member Details</th>}
                   {!columnFilters.location && <th>Village - Town</th>}
                   {!columnFilters.totalDeposits && <th>Total Deposits</th>}
@@ -763,8 +793,7 @@ export default function MasterSheet() {
               <tbody>
                 {currentTransactions.length === 0 ? (
                   <tr>
-                    <td colSpan={Object.values(columnFilters).filter(v => !v).length || 1} style={{ textAlign: 'center', padding: '60px 20px' }}>
-                      <div style={{ fontSize: '48px', marginBottom: '16px' }}>📋</div>
+                    <td colSpan={Object.values(columnFilters).filter(v => !v).length + 1 || 2} style={{ textAlign: 'center', padding: '60px 20px' }}>
                       <p style={{ fontSize: '16px', color: '#64748b', fontWeight: 500 }}>
                         No returns found.
                       </p>
@@ -772,8 +801,7 @@ export default function MasterSheet() {
                   </tr>
                 ) : Object.values(columnFilters).every(v => v) ? (
                   <tr>
-                    <td colSpan={1} style={{ textAlign: 'center', padding: '60px 20px' }}>
-                      <div style={{ fontSize: '48px', marginBottom: '16px' }}></div>
+                    <td colSpan={2} style={{ textAlign: 'center', padding: '60px 20px' }}>
                       <p style={{ fontSize: '16px', color: '#64748b', fontWeight: 500 }}>
                         All columns are hidden. Uncheck some filters to show data.
                       </p>
@@ -789,6 +817,14 @@ export default function MasterSheet() {
                     // Get month and year from transaction date
                     const transDate = new Date(transaction.date);
                     const monthYear = transDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+                    
+                    // Get month key from transaction (if available) or calculate from date
+                    const monthKey = (transaction as any).month_key || 
+                      `${transDate.getFullYear()}-${String(transDate.getMonth() + 1).padStart(2, '0')}`;
+                    const [monthYearNum, monthNum] = monthKey.split('-');
+                    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                                      'July', 'August', 'September', 'October', 'November', 'December'];
+                    const monthDisplay = `${monthNames[parseInt(monthNum) - 1]} ${monthYearNum}`;
                     
                     return (
                       <tr key={`${transaction.transaction_type}-${transaction.id}`}>
@@ -811,6 +847,9 @@ export default function MasterSheet() {
                             </div>
                           </td>
                         )}
+                        <td style={{ fontWeight: 600, color: '#475569', fontSize: '14px' }}>
+                          {monthDisplay}
+                        </td>
                         {!columnFilters.memberDetails && (
                           <td>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
