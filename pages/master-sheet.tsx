@@ -117,63 +117,80 @@ export default function MasterSheet() {
       // Master sheet shows only returns
       let filteredData = data.filter((t: Transaction) => t.transaction_type === 'return');
       
-      // If no returns found for this month, check if we're looking at current or future months
-      // and create dynamic returns from all members
+      // If no returns found for selected month, calculate returns for that month
+      // This works for ANY month/year (past, present, or future)
       if (filteredData.length === 0) {
-        const today = new Date();
-        const selectedMonthDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+        // Fetch all members and calculate returns for the selected month
+        const membersRes = await fetch('/api/members');
+        const membersData = await membersRes.json();
         
-        // Only show dynamic returns for current or future months
-        if (selectedMonthDate >= new Date(today.getFullYear(), today.getMonth(), 1)) {
-          // Fetch all members and calculate their current returns
-          const membersRes = await fetch('/api/members');
-          const membersData = await membersRes.json();
-          
-          // Filter by selected member if needed
-          const membersToShow = selectedMember 
-            ? membersData.filter((m: any) => m.id === parseInt(selectedMember))
-            : membersData;
-          
-          // OPTIMIZED: Use batch endpoints instead of individual API calls
-          const memberIds = membersToShow.map((m: any) => m.id);
-          
-          // Fetch all member details and returns in parallel
-          const [membersDetails, returnsData] = await Promise.all([
-            Promise.all(memberIds.map((id: number) => 
-              fetch(`/api/members/${id}`).then(res => res.json())
-            )),
-            fetch('/api/member/batch-current-returns', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ member_ids: memberIds })
-            }).then(res => res.json()).then(data => data.current_returns || {})
-          ]);
-          
-          // Create dynamic return entries
-          filteredData = membersToShow.map((member: any, index: number) => {
+        // Filter by selected member if needed
+        const membersToShow = selectedMember 
+          ? membersData.filter((m: any) => m.id === parseInt(selectedMember))
+          : membersData;
+        
+        // OPTIMIZED: Fetch all member details in parallel
+        const memberIds = membersToShow.map((m: any) => m.id);
+        const membersDetails = await Promise.all(
+          memberIds.map((id: number) => 
+            fetch(`/api/members/${id}`).then(res => res.json())
+          )
+        );
+        
+        // Calculate returns for the selected month using calculate-complex-interest API
+        const calculatedReturns = await Promise.all(
+          membersToShow.map(async (member: any, index: number) => {
             const memberData = membersDetails[index];
-            const currentReturn = returnsData[member.id] || 0;
+            if (!memberData || !memberData.deposits || memberData.deposits.length === 0) {
+              return null;
+            }
             
-            return {
-              id: `dynamic-${member.id}`,
-              type: 'return',
-              transaction_type: 'return',
-              member_id: member.id,
-              member_name: memberData?.name || member.name,
-              alias_name: memberData?.alias_name || member.alias_name,
-              unique_number: memberData?.unique_number || member.unique_number,
-              village: memberData?.village || member.village,
-              town: memberData?.town || member.town,
-              percentage_of_return: memberData?.percentage_of_return || member.percentage_of_return,
-              deposits: memberData?.deposits || [],
-              amount: currentReturn,
-              date: endDate.toISOString().split('T')[0], // Use end of month
-              interest_days: 30,
-              notes: 'Calculated dynamically',
-              is_dynamic: true
-            };
-          });
-        }
+            // Calculate interest for the selected month
+            try {
+              const calcRes = await fetch('/api/calculate-complex-interest', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  member_id: member.id,
+                  start_date: startDate.toISOString().split('T')[0],
+                  end_date: endDate.toISOString().split('T')[0]
+                })
+              });
+              const calcData = await calcRes.json();
+              
+              if (calcData.interest > 0) {
+                // Calculate interest days for the selected month
+                const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+                const interestDays = lastDay; // Full month
+                
+                return {
+                  id: `calculated-${member.id}-${selectedMonth}`,
+                  type: 'return',
+                  transaction_type: 'return',
+                  member_id: member.id,
+                  member_name: memberData.name || member.name,
+                  alias_name: memberData.alias_name || member.alias_name,
+                  unique_number: memberData.unique_number || member.unique_number,
+                  village: memberData.village || member.village,
+                  town: memberData.town || member.town,
+                  percentage_of_return: memberData.percentage_of_return || member.percentage_of_return,
+                  deposits: memberData.deposits || [],
+                  amount: calcData.interest,
+                  date: endDate.toISOString().split('T')[0],
+                  interest_days: interestDays,
+                  notes: `Calculated for ${selectedMonth}`,
+                  is_calculated: true
+                };
+              }
+            } catch (error) {
+              console.error(`Error calculating return for member ${member.id}:`, error);
+            }
+            return null;
+          })
+        );
+        
+        // Filter out null values
+        filteredData = calculatedReturns.filter((r: any) => r !== null);
       }
       
       // Sort transactions alphabetically by member name
@@ -447,23 +464,7 @@ export default function MasterSheet() {
   };
 
   // Generate month options (last 12 months)
-  const getMonthOptions = () => {
-    const options = [];
-    const now = new Date();
-    
-    for (let i = 0; i < 12; i++) {
-      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const monthKey = `${year}-${month}`;
-      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
-                          'July', 'August', 'September', 'October', 'November', 'December'];
-      const monthName = monthNames[date.getMonth()];
-      options.push({ value: monthKey, label: `${monthName} ${year}` });
-    }
-    
-    return options;
-  };
+  // Removed getMonthOptions - now using month input type for better date selection
 
   if (loading) {
     return (
@@ -571,17 +572,22 @@ export default function MasterSheet() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label>Select Month *</label>
-              <select
+              <input
+                type="month"
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
-                style={{ fontSize: '16px', padding: '12px', width: '100%' }}
-              >
-                {getMonthOptions().map(option => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                style={{
+                  fontSize: '16px',
+                  padding: '12px',
+                  width: '100%',
+                  border: '2px solid #e2e8f0',
+                  borderRadius: '8px',
+                  background: '#f8fafc',
+                  cursor: 'pointer'
+                }}
+                min="2010-01"
+                max={`${new Date().getFullYear()}-12`}
+              />
             </div>
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label>Filter by Member</label>

@@ -391,6 +391,8 @@ export default function ReferralSheet() {
                 fontWeight: 600,
                 cursor: 'pointer'
               }}
+              min="2010-01"
+              max={`${new Date().getFullYear()}-12`}
             />
           </div>
           <p style={{ margin: '12px 0 0 0', color: '#64748b', fontSize: '14px' }}>
