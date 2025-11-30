@@ -91,10 +91,12 @@ export default function MasterSheet() {
   const fetchTransactions = async () => {
     try {
       setLoading(true);
-      // Calculate date range from selected month
+      // Calculate date range from selected month (works for ANY month/year - even 10+ years back)
       const [year, month] = selectedMonth.split('-');
       const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
-      const endDate = new Date(parseInt(year), parseInt(month) - 1, 30, 23, 59, 59, 999);
+      // Get last day of the selected month (handles different month lengths correctly)
+      const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+      const endDate = new Date(parseInt(year), parseInt(month) - 1, lastDay, 23, 59, 59, 999);
       
       let url = '/api/master-transactions?';
       if (selectedMember) {
