@@ -15,6 +15,7 @@ interface ReferralCommission {
     referral_percent: number;
     commission_amount: number;
     is_direct: boolean;
+    investment_date?: string;
   }>;
 }
 
