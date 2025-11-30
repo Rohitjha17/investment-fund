@@ -752,7 +752,7 @@ export default function MasterSheet() {
             <div>
               <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 700 }}>Returns Details</h2>
               <p style={{ margin: '4px 0 0 0', color: '#64748b', fontSize: '14px' }}>
-                {(() => {
+                Showing all months from first deposit date to selected month: {(() => {
                   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
                                     'July', 'August', 'September', 'October', 'November', 'December'];
                   const [year, month] = selectedMonth.split('-');
