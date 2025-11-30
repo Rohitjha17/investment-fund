@@ -768,41 +768,49 @@ export default function ReferralSheet() {
                       )}
                       {!columnFilters.principalAmount && (
                         <td style={{ fontWeight: 700, color: '#10b981', fontSize: '16px' }}>
-                          {formatCurrency(item.principal_amount)}
+                          {formatCurrency(groupByReferrer ? (item.total_principal || 0) : item.principal_amount)}
                         </td>
                       )}
                       {!columnFilters.referralPercent && (
                         <td>
-                          <span style={{
-                            background: '#f0fdf4',
-                            color: '#166534',
-                            padding: '4px 10px',
-                            borderRadius: '6px',
-                            fontSize: '13px',
-                            fontWeight: 600
-                          }}>
-                            {item.referral_percent}%
-                          </span>
+                          {groupByReferrer ? (
+                            <span style={{ color: '#94a3b8' }}>-</span>
+                          ) : (
+                            <span style={{
+                              background: '#f0fdf4',
+                              color: '#166534',
+                              padding: '4px 10px',
+                              borderRadius: '6px',
+                              fontSize: '13px',
+                              fontWeight: 600
+                            }}>
+                              {item.referral_percent}%
+                            </span>
+                          )}
                         </td>
                       )}
                       {!columnFilters.commissionAmount && (
                         <td style={{ fontWeight: 700, color: '#f59e0b', fontSize: '16px' }}>
-                          {formatCurrency(item.commission_amount)}
+                          {formatCurrency(groupByReferrer ? (item.total_commission || 0) : item.commission_amount)}
                         </td>
                       )}
                       {!columnFilters.referralType && (
                         <td>
-                          <span style={{
-                            background: item.is_direct ? '#dcfce7' : '#fef3c7',
-                            color: item.is_direct ? '#166534' : '#92400e',
-                            padding: '4px 10px',
-                            borderRadius: '6px',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            border: `1px solid ${item.is_direct ? '#bbf7d0' : '#fbbf24'}`
-                          }}>
-                            {item.is_direct ? 'Direct' : 'Indirect'}
-                          </span>
+                          {groupByReferrer ? (
+                            <span style={{ color: '#94a3b8' }}>-</span>
+                          ) : (
+                            <span style={{
+                              background: item.is_direct ? '#dcfce7' : '#fef3c7',
+                              color: item.is_direct ? '#166534' : '#92400e',
+                              padding: '4px 10px',
+                              borderRadius: '6px',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              border: `1px solid ${item.is_direct ? '#bbf7d0' : '#fbbf24'}`
+                            }}>
+                              {item.is_direct ? 'Direct' : 'Indirect'}
+                            </span>
+                          )}
                         </td>
                       )}
                     </tr>
