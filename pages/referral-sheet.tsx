@@ -40,11 +40,13 @@ export default function ReferralSheet() {
     referredCount: false,
     totalCommission: false,
     memberDetails: false,
+    investmentDate: false,
     principalAmount: false,
     referralPercent: false,
     commissionAmount: false,
     referralType: false
   });
+  const [groupByReferrer, setGroupByReferrer] = useState(false);
 
   useEffect(() => {
     checkAuth();
@@ -106,6 +108,28 @@ export default function ReferralSheet() {
   const getFlattenedData = () => {
     if (!referralData) return [];
     
+    if (groupByReferrer) {
+      // Group by referrer name - show totals for each referrer
+      const grouped: Record<string, any> = {};
+      referralData.referral_commissions.forEach(commission => {
+        const key = commission.referrer_name.toLowerCase().trim();
+        if (!grouped[key]) {
+          grouped[key] = {
+            referrer_name: commission.referrer_name,
+            referred_count: 0,
+            total_commission: 0,
+            member_count: 0,
+            total_principal: 0
+          };
+        }
+        grouped[key].referred_count += commission.referred_count;
+        grouped[key].total_commission += commission.total_commission;
+        grouped[key].member_count += commission.breakdown.length;
+        grouped[key].total_principal += commission.breakdown.reduce((sum: number, b: any) => sum + b.principal_amount, 0);
+      });
+      return Object.values(grouped);
+    }
+    
     const flattened: any[] = [];
     referralData.referral_commissions.forEach(commission => {
       commission.breakdown.forEach(breakdown => {
@@ -118,7 +142,8 @@ export default function ReferralSheet() {
           principal_amount: breakdown.principal_amount,
           referral_percent: breakdown.referral_percent,
           commission_amount: breakdown.commission_amount,
-          is_direct: breakdown.is_direct
+          is_direct: breakdown.is_direct,
+          investment_date: breakdown.investment_date
         });
       });
     });
@@ -145,11 +170,12 @@ export default function ReferralSheet() {
       if (!columnFilters.referrerName) rowData['Referrer Name'] = item.referrer_name;
       if (!columnFilters.referredCount) rowData['Total Referred'] = item.referred_count;
       if (!columnFilters.totalCommission) rowData['Total Commission'] = item.total_commission;
-      if (!columnFilters.memberDetails) rowData['Member Name'] = item.member_name;
-      if (!columnFilters.principalAmount) rowData['Principal Amount'] = item.principal_amount;
-      if (!columnFilters.referralPercent) rowData['Referral %'] = item.referral_percent + '%';
-      if (!columnFilters.commissionAmount) rowData['Commission Amount'] = item.commission_amount;
-      if (!columnFilters.referralType) rowData['Referral Type'] = item.is_direct ? 'Direct' : 'Indirect';
+      if (!columnFilters.memberDetails) rowData['Member Name'] = groupByReferrer ? `${item.member_count || 0} members` : item.member_name;
+      if (!columnFilters.investmentDate) rowData['Investment Date'] = item.investment_date ? new Date(item.investment_date).toLocaleDateString('en-IN') : '-';
+      if (!columnFilters.principalAmount) rowData['Principal Amount'] = groupByReferrer ? (item.total_principal || 0) : item.principal_amount;
+      if (!columnFilters.referralPercent) rowData['Referral %'] = groupByReferrer ? '-' : (item.referral_percent + '%');
+      if (!columnFilters.commissionAmount) rowData['Commission Amount'] = groupByReferrer ? (item.total_commission || 0) : item.commission_amount;
+      if (!columnFilters.referralType) rowData['Referral Type'] = groupByReferrer ? '-' : (item.is_direct ? 'Direct' : 'Indirect');
       
       return rowData;
     });
@@ -395,9 +421,43 @@ export default function ReferralSheet() {
               max={`${new Date().getFullYear()}-12`}
             />
           </div>
-          <p style={{ margin: '12px 0 0 0', color: '#64748b', fontSize: '14px' }}>
-            Commission is calculated on <strong>Principal Amount</strong> (Total Deposits - Total Withdrawals) × Referral %
-          </p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', flexWrap: 'wrap', gap: '16px' }}>
+            <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>
+              Commission is calculated on <strong>Principal Amount</strong> (Total Deposits - Total Withdrawals) × Referral %
+            </p>
+            <label style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '8px',
+              cursor: 'pointer',
+              padding: '8px 16px',
+              borderRadius: '8px',
+              background: groupByReferrer ? '#dbeafe' : '#f8fafc',
+              border: `2px solid ${groupByReferrer ? '#3b82f6' : '#e2e8f0'}`,
+              transition: 'all 0.2s ease'
+            }}>
+              <input
+                type="checkbox"
+                checked={groupByReferrer}
+                onChange={(e) => {
+                  setGroupByReferrer(e.target.checked);
+                  setCurrentPage(1); // Reset to first page when filter changes
+                }}
+                style={{ 
+                  width: '18px', 
+                  height: '18px',
+                  accentColor: '#3b82f6'
+                }}
+              />
+              <span style={{ 
+                fontSize: '14px', 
+                fontWeight: 600,
+                color: groupByReferrer ? '#1e40af' : '#64748b'
+              }}>
+                Group by Referrer Name (Show Totals)
+              </span>
+            </label>
+          </div>
         </div>
 
         {/* Stats Summary */}
@@ -506,7 +566,7 @@ export default function ReferralSheet() {
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
               <button
                 onClick={() => setColumnFilters({
-                  referrerName: false, referredCount: false, totalCommission: false, memberDetails: false,
+                  referrerName: false, referredCount: false, totalCommission: false, memberDetails: false, investmentDate: false,
                   principalAmount: false, referralPercent: false, commissionAmount: false, referralType: false
                 })}
                 className="btn btn-secondary"
@@ -516,7 +576,7 @@ export default function ReferralSheet() {
               </button>
               <button
                 onClick={() => setColumnFilters({
-                  referrerName: true, referredCount: true, totalCommission: true, memberDetails: true,
+                  referrerName: true, referredCount: true, totalCommission: true, memberDetails: true, investmentDate: true,
                   principalAmount: true, referralPercent: true, commissionAmount: true, referralType: true
                 })}
                 className="btn btn-secondary"
@@ -541,6 +601,7 @@ export default function ReferralSheet() {
               referredCount: 'Total Referred',
               totalCommission: 'Total Commission',
               memberDetails: 'Member Details',
+              investmentDate: 'Investment Date',
               principalAmount: 'Principal Amount',
               referralPercent: 'Referral %',
               commissionAmount: 'Commission Amount',
@@ -606,6 +667,7 @@ export default function ReferralSheet() {
                   {!columnFilters.referredCount && <th>Total Referred</th>}
                   {!columnFilters.totalCommission && <th>Total Commission</th>}
                   {!columnFilters.memberDetails && <th>Member Details</th>}
+                  {!columnFilters.investmentDate && <th>Investment Date</th>}
                   {!columnFilters.principalAmount && <th>Principal Amount</th>}
                   {!columnFilters.referralPercent && <th>Referral %</th>}
                   {!columnFilters.commissionAmount && <th>Commission Amount</th>}
@@ -675,10 +737,33 @@ export default function ReferralSheet() {
                       )}
                       {!columnFilters.memberDetails && (
                         <td style={{ fontWeight: 600, color: '#1e293b' }}>
-                          {item.member_name}
-                          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-                            ID: {item.member_id}
-                          </div>
+                          {groupByReferrer ? (
+                            `${item.member_count || 0} members`
+                          ) : (
+                            <>
+                              {item.member_name}
+                              <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                                ID: {item.member_id}
+                              </div>
+                            </>
+                          )}
+                        </td>
+                      )}
+                      {!columnFilters.investmentDate && (
+                        <td style={{ fontSize: '14px', color: '#475569' }}>
+                          {groupByReferrer ? (
+                            <span style={{ color: '#94a3b8' }}>-</span>
+                          ) : (
+                            item.investment_date ? (
+                              new Date(item.investment_date).toLocaleDateString('en-IN', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric'
+                              })
+                            ) : (
+                              <span style={{ color: '#94a3b8' }}>-</span>
+                            )
+                          )}
                         </td>
                       )}
                       {!columnFilters.principalAmount && (

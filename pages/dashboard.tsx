@@ -45,6 +45,7 @@ export default function Dashboard() {
     name: false,
     alias: false,
     location: false,
+    investmentDate: false,
     totalDeposits: false,
     currentReturn: false,
     returnRate: false,
@@ -672,7 +673,7 @@ export default function Dashboard() {
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
               <button
                 onClick={() => setColumnFilters({
-                  uniqueNumber: false, name: false, alias: false, location: false,
+                  uniqueNumber: false, name: false, alias: false, location: false, investmentDate: false,
                   totalDeposits: false, currentReturn: false, returnRate: false, referral: false, actions: false
                 })}
                 className="btn btn-secondary"
@@ -682,7 +683,7 @@ export default function Dashboard() {
               </button>
               <button
                 onClick={() => setColumnFilters({
-                  uniqueNumber: true, name: true, alias: true, location: true,
+                  uniqueNumber: true, name: true, alias: true, location: true, investmentDate: true,
                   totalDeposits: true, currentReturn: true, returnRate: true, referral: true, actions: true
                 })}
                 className="btn btn-secondary"
@@ -707,6 +708,7 @@ export default function Dashboard() {
               name: 'Name',
               alias: 'Alias',
               location: 'Village - Town',
+              investmentDate: 'Investment Date',
               totalDeposits: 'Total Deposits',
               currentReturn: 'Current Month Return',
               returnRate: 'Default Return %',
@@ -790,6 +792,7 @@ export default function Dashboard() {
                   {!columnFilters.name && <th>Name</th>}
                   {!columnFilters.alias && <th>Alias</th>}
                   {!columnFilters.location && <th>Village - Town</th>}
+                  {!columnFilters.investmentDate && <th>Investment Date</th>}
                   {!columnFilters.totalDeposits && <th>Total Deposits</th>}
                   {!columnFilters.currentReturn && <th>Current Month Return</th>}
                   {!columnFilters.returnRate && <th>Default Return %</th>}
@@ -844,6 +847,24 @@ export default function Dashboard() {
                           {member.village && member.town 
                             ? `${member.village} - ${member.town}`
                             : member.village || member.town || <span style={{ color: '#94a3b8' }}>-</span>}
+                        </td>
+                      )}
+                      {!columnFilters.investmentDate && (
+                        <td style={{ fontSize: '14px', color: '#475569' }}>
+                          {member.deposits && member.deposits.length > 0 ? (
+                            (() => {
+                              const firstDeposit = member.deposits.sort((a: any, b: any) => 
+                                new Date(a.deposit_date).getTime() - new Date(b.deposit_date).getTime()
+                              )[0];
+                              return new Date(firstDeposit.deposit_date).toLocaleDateString('en-IN', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric'
+                              });
+                            })()
+                          ) : (
+                            <span style={{ color: '#94a3b8' }}>-</span>
+                          )}
                         </td>
                       )}
                       {!columnFilters.totalDeposits && (

@@ -52,6 +52,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         referral_percent: number;
         commission_amount: number;
         is_direct: boolean;
+        investment_date?: string;
       }>;
     }> = {};
 
@@ -111,9 +112,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       if (principalAmount <= 0) continue;
 
+      // Find earliest deposit date for this member
+      const depositDates = deposits.map((d: any) => new Date(d.deposit_date));
+      const earliestDepositDate = depositDates.length > 0 
+        ? new Date(Math.min(...depositDates.map((d: Date) => d.getTime())))
+        : null;
+
       // Calculate commission based on principal amount
-      // Commission = (Principal Amount * Referral Percent) / 100
-      const commissionAmount = (principalAmount * referralPercent) / 100;
+      // For first month: If investment is made mid-month, commission should be prorated
+      let commissionAmount = (principalAmount * referralPercent) / 100;
+      
+      // If this is the first month (investment month), prorate commission based on investment date
+      if (earliestDepositDate && 
+          earliestDepositDate.getMonth() === startDate.getMonth() && 
+          earliestDepositDate.getFullYear() === startDate.getFullYear()) {
+        // Investment was made in this month - calculate days from investment date to end of month
+        const investmentDate = new Date(earliestDepositDate);
+        investmentDate.setHours(0, 0, 0, 0);
+        const daysInMonth = endDate.getDate();
+        const daysFromInvestment = daysInMonth - investmentDate.getDate() + 1; // +1 to include investment day
+        const proratedFactor = daysFromInvestment / daysInMonth;
+        commissionAmount = commissionAmount * proratedFactor;
+      }
 
       // Find the root referrer for hierarchical referrals
       const rootReferrer = findRootReferrer(referralName);
@@ -137,7 +157,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         principal_amount: principalAmount,
         referral_percent: referralPercent,
         commission_amount: commissionAmount,
-        is_direct: isDirect
+        is_direct: isDirect,
+        investment_date: earliestDepositDate ? earliestDepositDate.toISOString().split('T')[0] : undefined
       });
     }
 

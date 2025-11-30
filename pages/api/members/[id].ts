@@ -45,7 +45,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Check for duplicate names and aliases (excluding current member)
       const allMembers = await db.getMembers();
       
-      // Check for duplicate name
+      // Check for duplicate name (alias name can be duplicate - multiple people can have same alias)
       if (name) {
         const duplicateName = allMembers.find((m: any) => 
           m.id !== memberId && 
@@ -59,19 +59,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       }
 
-      // Check for duplicate alias (if provided)
-      if (alias_name && alias_name.trim()) {
-        const duplicateAlias = allMembers.find((m: any) => 
-          m.id !== memberId && 
-          m.alias_name && 
-          m.alias_name.toLowerCase().trim() === alias_name.toLowerCase().trim()
-        );
-        if (duplicateAlias) {
-          return res.status(400).json({ 
-            error: `A member with the alias "${alias_name}" already exists. Please use a different alias.` 
-          });
-        }
-      }
+      // Removed alias name uniqueness check - alias names can be duplicate
 
       const success = await db.updateMember(memberId, {
         name,
