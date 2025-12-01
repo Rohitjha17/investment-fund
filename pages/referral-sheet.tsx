@@ -190,7 +190,6 @@ export default function ReferralSheet() {
     if (!columnFilters.principalAmount) colWidths.push({ wch: 18 });
     if (!columnFilters.referralPercent) colWidths.push({ wch: 15 });
     if (!columnFilters.commissionAmount) colWidths.push({ wch: 20 });
-    if (!columnFilters.referralType) colWidths.push({ wch: 15 });
     
     ws['!cols'] = colWidths;
 
