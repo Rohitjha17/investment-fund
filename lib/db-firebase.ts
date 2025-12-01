@@ -76,9 +76,19 @@ const dbMethods = {
         const totalWithdrawals = withdrawals.reduce((sum: number, w: any) => sum + (parseFloat(w.amount) || 0), 0);
         const totalReturns = returns.reduce((sum: number, r: any) => sum + (parseFloat(r.return_amount) || 0), 0);
 
+        // Format deposits with proper date conversion
+        const formattedDeposits = deposits.map((d: any) => ({
+          id: parseInt(d.id) || d.id,
+          amount: parseFloat(d.amount) || 0,
+          deposit_date: toISO(d.deposit_date),
+          percentage: d.percentage !== null && d.percentage !== undefined ? parseFloat(d.percentage) : null,
+          notes: d.notes || null
+        }));
+
         return {
           ...member,
           id: memberId,
+          deposits: formattedDeposits,
           total_deposits: totalDeposits,
           total_withdrawals: totalWithdrawals,
           total_returns: totalReturns
