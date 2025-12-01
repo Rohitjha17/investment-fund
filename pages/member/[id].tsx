@@ -29,6 +29,10 @@ export default function MemberDetail() {
   const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
   const [currentReturn, setCurrentReturn] = useState<{ amount: number; period_info: string } | null>(null);
   const [depositBreakdown, setDepositBreakdown] = useState<Record<number, number>>({});
+  const [depositsPage, setDepositsPage] = useState(1);
+  const [withdrawalsPage, setWithdrawalsPage] = useState(1);
+  const [returnsPage, setReturnsPage] = useState(1);
+  const [itemsPerPage] = useState(10);
   const [transactionForm, setTransactionForm] = useState({
     amount: '',
     date: '',
@@ -166,6 +170,128 @@ export default function MemberDetail() {
       month: 'short',
       year: 'numeric'
     });
+  };
+
+  // Pagination helper function
+  const renderPagination = (currentPage: number, totalPages: number, setPage: (page: number) => void) => {
+    if (totalPages <= 1) return null;
+
+    const pages = [];
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+    if (endPage - startPage + 1 < maxVisiblePages) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+
+    if (currentPage > 1) {
+      pages.push(
+        <button
+          key="prev"
+          onClick={() => setPage(currentPage - 1)}
+          style={{
+            padding: '8px 12px',
+            margin: '0 4px',
+            border: '2px solid #e2e8f0',
+            borderRadius: '8px',
+            background: '#ffffff',
+            color: '#64748b',
+            cursor: 'pointer',
+            fontWeight: 600,
+            transition: 'all 0.2s ease'
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.borderColor = '#6366f1';
+            e.currentTarget.style.color = '#6366f1';
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.borderColor = '#e2e8f0';
+            e.currentTarget.style.color = '#64748b';
+          }}
+        >
+          ← Previous
+        </button>
+      );
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(
+        <button
+          key={i}
+          onClick={() => setPage(i)}
+          style={{
+            padding: '8px 12px',
+            margin: '0 4px',
+            border: '2px solid',
+            borderColor: i === currentPage ? '#6366f1' : '#e2e8f0',
+            borderRadius: '8px',
+            background: i === currentPage ? '#6366f1' : '#ffffff',
+            color: i === currentPage ? '#ffffff' : '#64748b',
+            cursor: 'pointer',
+            fontWeight: 600,
+            transition: 'all 0.2s ease'
+          }}
+          onMouseOver={(e) => {
+            if (i !== currentPage) {
+              e.currentTarget.style.borderColor = '#6366f1';
+              e.currentTarget.style.color = '#6366f1';
+            }
+          }}
+          onMouseOut={(e) => {
+            if (i !== currentPage) {
+              e.currentTarget.style.borderColor = '#e2e8f0';
+              e.currentTarget.style.color = '#64748b';
+            }
+          }}
+        >
+          {i}
+        </button>
+      );
+    }
+
+    if (currentPage < totalPages) {
+      pages.push(
+        <button
+          key="next"
+          onClick={() => setPage(currentPage + 1)}
+          style={{
+            padding: '8px 12px',
+            margin: '0 4px',
+            border: '2px solid #e2e8f0',
+            borderRadius: '8px',
+            background: '#ffffff',
+            color: '#64748b',
+            cursor: 'pointer',
+            fontWeight: 600,
+            transition: 'all 0.2s ease'
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.borderColor = '#6366f1';
+            e.currentTarget.style.color = '#6366f1';
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.borderColor = '#e2e8f0';
+            e.currentTarget.style.color = '#64748b';
+          }}
+        >
+          Next →
+        </button>
+      );
+    }
+
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginTop: '24px',
+        flexWrap: 'wrap',
+        gap: '8px'
+      }}>
+        {pages}
+      </div>
+    );
   };
 
   if (loading) {
@@ -367,26 +493,44 @@ export default function MemberDetail() {
         </div>
 
         <div className="card">
-          <h2 style={{ marginBottom: '20px', fontSize: '24px', fontWeight: 700 }}>Deposits</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 700 }}>Deposits</h2>
+            <span style={{ 
+              color: '#64748b', 
+              fontSize: '14px',
+              background: '#f1f5f9',
+              padding: '6px 12px',
+              borderRadius: '8px',
+              fontWeight: 600
+            }}>
+              {member.deposits.length} total
+            </span>
+          </div>
           {member.deposits.length === 0 ? (
             <p style={{ color: '#64748b', textAlign: 'center', padding: '40px' }}>No deposits found.</p>
           ) : (
-            <div style={{ overflowX: 'auto', borderRadius: '12px' }}>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Date</th>
-                    <th>Amount</th>
-                    <th>Interest Rate</th>
-                    <th>Current Month Interest</th>
-                    <th>Notes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {member.deposits
-                    .sort((a, b) => new Date(a.deposit_date).getTime() - new Date(b.deposit_date).getTime())
-                    .map((deposit, index) => {
+            <>
+              <div style={{ overflowX: 'auto', borderRadius: '12px' }}>
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Date</th>
+                      <th>Amount</th>
+                      <th>Interest Rate</th>
+                      <th>Current Month Interest</th>
+                      <th>Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const sortedDeposits = [...member.deposits].sort((a, b) => new Date(a.deposit_date).getTime() - new Date(b.deposit_date).getTime());
+                      const totalPages = Math.ceil(sortedDeposits.length / itemsPerPage);
+                      const startIndex = (depositsPage - 1) * itemsPerPage;
+                      const endIndex = startIndex + itemsPerPage;
+                      const currentDeposits = sortedDeposits.slice(startIndex, endIndex);
+                      
+                      return currentDeposits.map((deposit, index) => {
                       const depositRate = deposit.percentage !== null && deposit.percentage !== undefined 
                         ? deposit.percentage 
                         : member.percentage_of_return;
@@ -394,9 +538,9 @@ export default function MemberDetail() {
                       // Get current month interest from API breakdown
                       const currentMonthInterest = depositBreakdown[deposit.id] || 0;
                       
-                      return (
-                        <tr key={deposit.id}>
-                          <td style={{ fontWeight: 600, color: '#64748b' }}>Deposit {index + 1}</td>
+                        return (
+                          <tr key={deposit.id}>
+                            <td style={{ fontWeight: 600, color: '#64748b' }}>Deposit {startIndex + index + 1}</td>
                           <td style={{ fontWeight: 500 }}>{formatDate(deposit.deposit_date)}</td>
                           <td style={{ fontWeight: 700, color: '#10b981', fontSize: '16px' }}>
                             {formatCurrency(deposit.amount)}
@@ -425,35 +569,59 @@ export default function MemberDetail() {
                           </td>
                           <td>{deposit.notes || <span style={{ color: '#94a3b8' }}>-</span>}</td>
                         </tr>
-                      );
-                    })}
-                </tbody>
-              </table>
-            </div>
+                        );
+                      });
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+              {(() => {
+                const totalPages = Math.ceil(member.deposits.length / itemsPerPage);
+                return renderPagination(depositsPage, totalPages, setDepositsPage);
+              })()}
+            </>
           )}
         </div>
 
         <div className="card">
-          <h2 style={{ marginBottom: '20px', fontSize: '24px', fontWeight: 700 }}>Withdrawals</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 700 }}>Withdrawals</h2>
+            <span style={{ 
+              color: '#64748b', 
+              fontSize: '14px',
+              background: '#f1f5f9',
+              padding: '6px 12px',
+              borderRadius: '8px',
+              fontWeight: 600
+            }}>
+              {member.withdrawals.length} total
+            </span>
+          </div>
           {member.withdrawals.length === 0 ? (
             <p style={{ color: '#64748b', textAlign: 'center', padding: '40px' }}>No withdrawals found.</p>
           ) : (
-            <div style={{ overflowX: 'auto', borderRadius: '12px' }}>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Date</th>
-                    <th>Amount</th>
-                    <th>Notes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {member.withdrawals
-                    .sort((a, b) => new Date(a.withdrawal_date).getTime() - new Date(b.withdrawal_date).getTime())
-                    .map((withdrawal, index) => (
-                      <tr key={withdrawal.id}>
-                        <td style={{ fontWeight: 600, color: '#64748b' }}>#{index + 1}</td>
+            <>
+              <div style={{ overflowX: 'auto', borderRadius: '12px' }}>
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Date</th>
+                      <th>Amount</th>
+                      <th>Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const sortedWithdrawals = [...member.withdrawals].sort((a, b) => new Date(a.withdrawal_date).getTime() - new Date(b.withdrawal_date).getTime());
+                      const totalPages = Math.ceil(sortedWithdrawals.length / itemsPerPage);
+                      const startIndex = (withdrawalsPage - 1) * itemsPerPage;
+                      const endIndex = startIndex + itemsPerPage;
+                      const currentWithdrawals = sortedWithdrawals.slice(startIndex, endIndex);
+                      
+                      return currentWithdrawals.map((withdrawal, index) => (
+                        <tr key={withdrawal.id}>
+                          <td style={{ fontWeight: 600, color: '#64748b' }}>#{startIndex + index + 1}</td>
                         <td style={{ fontWeight: 500 }}>{formatDate(withdrawal.withdrawal_date)}</td>
                         <td style={{ fontWeight: 700, color: '#ef4444', fontSize: '16px' }}>
                           {formatCurrency(withdrawal.amount)}

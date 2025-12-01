@@ -17,6 +17,8 @@ export default function Transactions() {
   const router = useRouter();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(15);
 
   useEffect(() => {
     checkAuth();
@@ -65,6 +67,136 @@ export default function Transactions() {
       month: 'short',
       year: 'numeric'
     });
+  };
+
+  // Pagination logic
+  const totalPages = Math.ceil(transactions.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentTransactions = transactions.slice(startIndex, endIndex);
+
+  const renderPagination = () => {
+    if (totalPages <= 1) return null;
+
+    const pages = [];
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+    if (endPage - startPage + 1 < maxVisiblePages) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+
+    // Previous button
+    if (currentPage > 1) {
+      pages.push(
+        <button
+          key="prev"
+          onClick={() => setCurrentPage(currentPage - 1)}
+          style={{
+            padding: '8px 12px',
+            margin: '0 4px',
+            border: '2px solid #e2e8f0',
+            borderRadius: '8px',
+            background: '#ffffff',
+            color: '#64748b',
+            cursor: 'pointer',
+            fontWeight: 600,
+            transition: 'all 0.2s ease'
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.borderColor = '#6366f1';
+            e.currentTarget.style.color = '#6366f1';
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.borderColor = '#e2e8f0';
+            e.currentTarget.style.color = '#64748b';
+          }}
+        >
+          ← Previous
+        </button>
+      );
+    }
+
+    // Page numbers
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(
+        <button
+          key={i}
+          onClick={() => setCurrentPage(i)}
+          style={{
+            padding: '8px 12px',
+            margin: '0 4px',
+            border: '2px solid',
+            borderColor: i === currentPage ? '#6366f1' : '#e2e8f0',
+            borderRadius: '8px',
+            background: i === currentPage ? '#6366f1' : '#ffffff',
+            color: i === currentPage ? '#ffffff' : '#64748b',
+            cursor: 'pointer',
+            fontWeight: 600,
+            transition: 'all 0.2s ease'
+          }}
+          onMouseOver={(e) => {
+            if (i !== currentPage) {
+              e.currentTarget.style.borderColor = '#6366f1';
+              e.currentTarget.style.color = '#6366f1';
+            }
+          }}
+          onMouseOut={(e) => {
+            if (i !== currentPage) {
+              e.currentTarget.style.borderColor = '#e2e8f0';
+              e.currentTarget.style.color = '#64748b';
+            }
+          }}
+        >
+          {i}
+        </button>
+      );
+    }
+
+    // Next button
+    if (currentPage < totalPages) {
+      pages.push(
+        <button
+          key="next"
+          onClick={() => setCurrentPage(currentPage + 1)}
+          style={{
+            padding: '8px 12px',
+            margin: '0 4px',
+            border: '2px solid #e2e8f0',
+            borderRadius: '8px',
+            background: '#ffffff',
+            color: '#64748b',
+            cursor: 'pointer',
+            fontWeight: 600,
+            transition: 'all 0.2s ease'
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.borderColor = '#6366f1';
+            e.currentTarget.style.color = '#6366f1';
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.borderColor = '#e2e8f0';
+            e.currentTarget.style.color = '#64748b';
+          }}
+        >
+          Next →
+        </button>
+      );
+    }
+
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginTop: '24px',
+        flexWrap: 'wrap',
+        gap: '8px'
+      }}>
+        {pages}
+      </div>
+    );
   };
 
   if (loading) {
@@ -154,7 +286,7 @@ export default function Transactions() {
               borderRadius: '8px',
               fontWeight: 600
             }}>
-              {transactions.length} transactions
+              Page {currentPage} of {totalPages || 1} ({transactions.length} total transactions)
             </span>
           </div>
           
@@ -180,7 +312,7 @@ export default function Transactions() {
                     </td>
                   </tr>
                 ) : (
-                  Array.isArray(transactions) && transactions.map((transaction, index) => {
+                  Array.isArray(currentTransactions) && currentTransactions.map((transaction, index) => {
                     const transactionType = transaction.type || (transaction as any).transaction_type || 'deposit';
                     return (
                       <tr key={`${transactionType}-${transaction.id}-${index}`}>
@@ -225,6 +357,9 @@ export default function Transactions() {
               </tbody>
             </table>
           </div>
+          
+          {/* Pagination */}
+          {renderPagination()}
         </div>
       </div>
     </>

@@ -22,6 +22,8 @@ export default function ReferralProfile() {
   const [referralData, setReferralData] = useState<ReferralData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(15);
 
   useEffect(() => {
     if (name) {
@@ -76,6 +78,134 @@ export default function ReferralProfile() {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
+  };
+
+  // Pagination logic
+  const breakdown = referralData?.breakdown || [];
+  const totalPages = Math.ceil(breakdown.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentBreakdown = breakdown.slice(startIndex, endIndex);
+
+  const renderPagination = () => {
+    if (totalPages <= 1) return null;
+
+    const pages = [];
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+    if (endPage - startPage + 1 < maxVisiblePages) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+
+    if (currentPage > 1) {
+      pages.push(
+        <button
+          key="prev"
+          onClick={() => setCurrentPage(currentPage - 1)}
+          style={{
+            padding: '8px 12px',
+            margin: '0 4px',
+            border: '2px solid #e2e8f0',
+            borderRadius: '8px',
+            background: '#ffffff',
+            color: '#64748b',
+            cursor: 'pointer',
+            fontWeight: 600,
+            transition: 'all 0.2s ease'
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.borderColor = '#6366f1';
+            e.currentTarget.style.color = '#6366f1';
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.borderColor = '#e2e8f0';
+            e.currentTarget.style.color = '#64748b';
+          }}
+        >
+          ← Previous
+        </button>
+      );
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(
+        <button
+          key={i}
+          onClick={() => setCurrentPage(i)}
+          style={{
+            padding: '8px 12px',
+            margin: '0 4px',
+            border: '2px solid',
+            borderColor: i === currentPage ? '#6366f1' : '#e2e8f0',
+            borderRadius: '8px',
+            background: i === currentPage ? '#6366f1' : '#ffffff',
+            color: i === currentPage ? '#ffffff' : '#64748b',
+            cursor: 'pointer',
+            fontWeight: 600,
+            transition: 'all 0.2s ease'
+          }}
+          onMouseOver={(e) => {
+            if (i !== currentPage) {
+              e.currentTarget.style.borderColor = '#6366f1';
+              e.currentTarget.style.color = '#6366f1';
+            }
+          }}
+          onMouseOut={(e) => {
+            if (i !== currentPage) {
+              e.currentTarget.style.borderColor = '#e2e8f0';
+              e.currentTarget.style.color = '#64748b';
+            }
+          }}
+        >
+          {i}
+        </button>
+      );
+    }
+
+    if (currentPage < totalPages) {
+      pages.push(
+        <button
+          key="next"
+          onClick={() => setCurrentPage(currentPage + 1)}
+          style={{
+            padding: '8px 12px',
+            margin: '0 4px',
+            border: '2px solid #e2e8f0',
+            borderRadius: '8px',
+            background: '#ffffff',
+            color: '#64748b',
+            cursor: 'pointer',
+            fontWeight: 600,
+            transition: 'all 0.2s ease'
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.borderColor = '#6366f1';
+            e.currentTarget.style.color = '#6366f1';
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.borderColor = '#e2e8f0';
+            e.currentTarget.style.color = '#64748b';
+          }}
+        >
+          Next →
+        </button>
+      );
+    }
+
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginTop: '24px',
+        flexWrap: 'wrap',
+        gap: '8px'
+      }}>
+        {pages}
+      </div>
+    );
   };
 
   if (loading) {
@@ -233,82 +363,95 @@ export default function ReferralProfile() {
 
       {/* Detailed Breakdown */}
       <div className="card">
-        <h3 style={{ 
-          marginBottom: '24px', 
-          fontSize: '24px', 
-          fontWeight: 700,
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px'
-        }}>
-          📋 Commission Breakdown
-        </h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+          <h3 style={{ 
+            margin: 0, 
+            fontSize: '24px', 
+            fontWeight: 700,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px'
+          }}>
+            Commission Breakdown
+          </h3>
+          <span style={{ 
+            color: '#64748b', 
+            fontSize: '14px',
+            background: '#f1f5f9',
+            padding: '6px 12px',
+            borderRadius: '8px',
+            fontWeight: 600
+          }}>
+            Page {currentPage} of {totalPages || 1} ({breakdown.length} total records)
+          </span>
+        </div>
 
         {referralData?.breakdown && referralData.breakdown.length > 0 ? (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
-                  <th style={{ 
-                    padding: '16px', 
-                    textAlign: 'left', 
-                    fontWeight: 700, 
-                    color: '#374151',
-                    fontSize: '14px'
-                  }}>
-                    Member
-                  </th>
-                  <th style={{ 
-                    padding: '16px', 
-                    textAlign: 'center', 
-                    fontWeight: 700, 
-                    color: '#374151',
-                    fontSize: '14px'
-                  }}>
-                    Type
-                  </th>
-                  <th style={{ 
-                    padding: '16px', 
-                    textAlign: 'right', 
-                    fontWeight: 700, 
-                    color: '#374151',
-                    fontSize: '14px'
-                  }}>
-                    Interest Earned
-                  </th>
-                  <th style={{ 
-                    padding: '16px', 
-                    textAlign: 'center', 
-                    fontWeight: 700, 
-                    color: '#374151',
-                    fontSize: '14px'
-                  }}>
-                    Commission %
-                  </th>
-                  <th style={{ 
-                    padding: '16px', 
-                    textAlign: 'right', 
-                    fontWeight: 700, 
-                    color: '#374151',
-                    fontSize: '14px'
-                  }}>
-                    Commission Amount
-                  </th>
-                  <th style={{ 
-                    padding: '16px', 
-                    textAlign: 'center', 
-                    fontWeight: 700, 
-                    color: '#374151',
-                    fontSize: '14px'
-                  }}>
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {referralData.breakdown
-                  .sort((a, b) => b.commission_amount - a.commission_amount)
-                  .map((item, index) => (
+          <>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
+                    <th style={{ 
+                      padding: '16px', 
+                      textAlign: 'left', 
+                      fontWeight: 700, 
+                      color: '#374151',
+                      fontSize: '14px'
+                    }}>
+                      Member
+                    </th>
+                    <th style={{ 
+                      padding: '16px', 
+                      textAlign: 'center', 
+                      fontWeight: 700, 
+                      color: '#374151',
+                      fontSize: '14px'
+                    }}>
+                      Type
+                    </th>
+                    <th style={{ 
+                      padding: '16px', 
+                      textAlign: 'right', 
+                      fontWeight: 700, 
+                      color: '#374151',
+                      fontSize: '14px'
+                    }}>
+                      Interest Earned
+                    </th>
+                    <th style={{ 
+                      padding: '16px', 
+                      textAlign: 'center', 
+                      fontWeight: 700, 
+                      color: '#374151',
+                      fontSize: '14px'
+                    }}>
+                      Commission %
+                    </th>
+                    <th style={{ 
+                      padding: '16px', 
+                      textAlign: 'right', 
+                      fontWeight: 700, 
+                      color: '#374151',
+                      fontSize: '14px'
+                    }}>
+                      Commission Amount
+                    </th>
+                    <th style={{ 
+                      padding: '16px', 
+                      textAlign: 'center', 
+                      fontWeight: 700, 
+                      color: '#374151',
+                      fontSize: '14px'
+                    }}>
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentBreakdown
+                    .sort((a, b) => b.commission_amount - a.commission_amount)
+                    .map((item, index) => (
                   <tr 
                     key={item.member_id} 
                     style={{ 
@@ -394,10 +537,12 @@ export default function ReferralProfile() {
                       </button>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+            {renderPagination()}
+          </>
         ) : (
           <div style={{ 
             textAlign: 'center', 
