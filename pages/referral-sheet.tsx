@@ -44,8 +44,7 @@ export default function ReferralSheet() {
     investmentDate: false,
     principalAmount: false,
     referralPercent: false,
-    commissionAmount: false,
-    referralType: false
+    commissionAmount: false
   });
   const [groupByReferrer, setGroupByReferrer] = useState(false);
 
@@ -176,7 +175,6 @@ export default function ReferralSheet() {
       if (!columnFilters.principalAmount) rowData['Principal Amount'] = groupByReferrer ? (item.total_principal || 0) : item.principal_amount;
       if (!columnFilters.referralPercent) rowData['Referral %'] = groupByReferrer ? '-' : (item.referral_percent + '%');
       if (!columnFilters.commissionAmount) rowData['Commission Amount'] = groupByReferrer ? (item.total_commission || 0) : item.commission_amount;
-      if (!columnFilters.referralType) rowData['Referral Type'] = groupByReferrer ? '-' : (item.is_direct ? 'Direct' : 'Indirect');
       
       return rowData;
     });
@@ -568,7 +566,7 @@ export default function ReferralSheet() {
               <button
                 onClick={() => setColumnFilters({
                   referrerName: false, referredCount: false, totalCommission: false, memberDetails: false, investmentDate: false,
-                  principalAmount: false, referralPercent: false, commissionAmount: false, referralType: false
+                  principalAmount: false, referralPercent: false, commissionAmount: false
                 })}
                 className="btn btn-secondary"
                 style={{ padding: '8px 16px', fontSize: '14px' }}
@@ -578,7 +576,7 @@ export default function ReferralSheet() {
               <button
                 onClick={() => setColumnFilters({
                   referrerName: true, referredCount: true, totalCommission: true, memberDetails: true, investmentDate: true,
-                  principalAmount: true, referralPercent: true, commissionAmount: true, referralType: true
+                  principalAmount: true, referralPercent: true, commissionAmount: true
                 })}
                 className="btn btn-secondary"
                 style={{ padding: '8px 16px', fontSize: '14px' }}
@@ -605,8 +603,7 @@ export default function ReferralSheet() {
               investmentDate: 'Investment Date',
               principalAmount: 'Principal Amount',
               referralPercent: 'Referral %',
-              commissionAmount: 'Commission Amount',
-              referralType: 'Referral Type'
+              commissionAmount: 'Commission Amount'
             }).map(([key, label]) => (
               <label key={key} style={{ 
                 display: 'flex', 
@@ -672,7 +669,6 @@ export default function ReferralSheet() {
                   {!columnFilters.principalAmount && <th>Principal Amount</th>}
                   {!columnFilters.referralPercent && <th>Referral %</th>}
                   {!columnFilters.commissionAmount && <th>Commission Amount</th>}
-                  {!columnFilters.referralType && <th>Referral Type</th>}
                 </tr>
               </thead>
               <tbody>
