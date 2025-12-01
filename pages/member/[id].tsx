@@ -626,12 +626,18 @@ export default function MemberDetail() {
                         <td style={{ fontWeight: 700, color: '#ef4444', fontSize: '16px' }}>
                           {formatCurrency(withdrawal.amount)}
                         </td>
-                        <td>{withdrawal.notes || <span style={{ color: '#94a3b8' }}>-</span>}</td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
+                          <td>{withdrawal.notes || <span style={{ color: '#94a3b8' }}>-</span>}</td>
+                        </tr>
+                      ));
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+              {(() => {
+                const totalPages = Math.ceil(member.withdrawals.length / itemsPerPage);
+                return renderPagination(withdrawalsPage, totalPages, setWithdrawalsPage);
+              })()}
+            </>
           )}
         </div>
 
