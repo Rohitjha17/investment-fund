@@ -791,25 +791,6 @@ export default function ReferralSheet() {
                           {formatCurrency(groupByReferrer ? (item.total_commission || 0) : item.commission_amount)}
                         </td>
                       )}
-                      {!columnFilters.referralType && (
-                        <td>
-                          {groupByReferrer ? (
-                            <span style={{ color: '#94a3b8' }}>-</span>
-                          ) : (
-                            <span style={{
-                              background: item.is_direct ? '#dcfce7' : '#fef3c7',
-                              color: item.is_direct ? '#166534' : '#92400e',
-                              padding: '4px 10px',
-                              borderRadius: '6px',
-                              fontSize: '12px',
-                              fontWeight: 600,
-                              border: `1px solid ${item.is_direct ? '#bbf7d0' : '#fbbf24'}`
-                            }}>
-                              {item.is_direct ? 'Direct' : 'Indirect'}
-                            </span>
-                          )}
-                        </td>
-                      )}
                     </tr>
                   ))
                 )}
