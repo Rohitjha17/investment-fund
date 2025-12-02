@@ -66,7 +66,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const depositDate = new Date(firstDeposit.deposit_date);
         const startDate = new Date(depositDate);
         startDate.setDate(startDate.getDate() + 1);
-        const endDate = new Date(today.getFullYear(), today.getMonth(), 30, 23, 59, 59, 999);
+        // Calculate until last day of current month (not hardcoded to 30th)
+        const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+        const endDate = new Date(today.getFullYear(), today.getMonth(), lastDay, 23, 59, 59, 999);
 
         returnAmount = calculateComplexInterest(
           deposits.map((d: any) => ({
