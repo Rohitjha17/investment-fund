@@ -67,8 +67,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const startDate = new Date(depositDate);
       startDate.setDate(startDate.getDate() + 1); // Interest starts next day
       
-      // Calculate until 30th of current month
-      const endDate = new Date(today.getFullYear(), today.getMonth(), 30, 23, 59, 59, 999);
+      // Calculate until last day of current month (not hardcoded to 30th)
+      const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+      const endDate = new Date(today.getFullYear(), today.getMonth(), lastDay, 23, 59, 59, 999);
 
       // Calculate days
       interestDays = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
@@ -92,7 +93,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       );
 
       periodType = 'current_month_first_deposit';
-      periodInfo = `${formatDate(startDate)} to 30th of ${today.toLocaleString('en-IN', { month: 'long', year: 'numeric' })}`;
+      const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+      periodInfo = `${formatDate(startDate)} to ${lastDay}th of ${today.toLocaleString('en-IN', { month: 'long', year: 'numeric' })}`;
     } else {
       // No deposits in current month - use full month window
       if (isPastSecond) {
