@@ -54,6 +54,10 @@ export default function MasterSheet() {
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(15);
+  const [showStatementModal, setShowStatementModal] = useState(false);
+  const [statementData, setStatementData] = useState<Transaction[]>([]);
+  const [statementLoading, setStatementLoading] = useState(false);
+  const [selectedMemberDetails, setSelectedMemberDetails] = useState<any>(null);
 
   useEffect(() => {
     checkAuth();
@@ -282,6 +286,205 @@ export default function MasterSheet() {
     } catch (error) {
       console.error('Error fetching members:', error);
     }
+  };
+
+  const generateMemberStatement = async () => {
+    if (!selectedMember) {
+      alert('Please select a member first');
+      return;
+    }
+
+    try {
+      setStatementLoading(true);
+      
+      // Fetch member details
+      const memberRes = await fetch(`/api/members/${selectedMember}?_t=${Date.now()}`, { cache: 'no-store' });
+      const memberData = await memberRes.json();
+      setSelectedMemberDetails(memberData);
+
+      if (!memberData || !memberData.deposits || memberData.deposits.length === 0) {
+        alert('No deposits found for this member');
+        setStatementLoading(false);
+        return;
+      }
+
+      // Get earliest deposit date
+      const depositDates = memberData.deposits.map((d: any) => new Date(d.deposit_date));
+      const earliestDepositDate = new Date(Math.min(...depositDates.map((d: Date) => d.getTime())));
+      const firstDepositMonth = new Date(earliestDepositDate.getFullYear(), earliestDepositDate.getMonth(), 1);
+      
+      // Get current month
+      const now = new Date();
+      const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      
+      // Generate all months from first deposit to current month
+      const monthsToCalculate = getAllMonthsBetween(firstDepositMonth, currentMonth);
+      
+      // Fetch stored returns for this member
+      const storedRes = await fetch(`/api/master-transactions?member_id=${selectedMember}&start_date=${firstDepositMonth.toISOString().split('T')[0]}&end_date=${now.toISOString().split('T')[0]}&_t=${Date.now()}`, { cache: 'no-store' });
+      const storedData = await storedRes.json();
+      const storedReturns = storedData.filter((t: Transaction) => t.transaction_type === 'return');
+      
+      // Create a map of stored returns by month
+      const storedReturnsMap = new Map<string, Transaction>();
+      storedReturns.forEach((ret: Transaction) => {
+        const retDate = new Date(ret.date);
+        const monthKey = `${retDate.getFullYear()}-${String(retDate.getMonth() + 1).padStart(2, '0')}`;
+        storedReturnsMap.set(monthKey, ret);
+      });
+      
+      // Calculate missing returns for all months
+      const calculationPromises: Promise<any>[] = [];
+      
+      for (const monthKey of monthsToCalculate) {
+        const [monthYear, monthNum] = monthKey.split('-');
+        const monthStartDate = new Date(parseInt(monthYear), parseInt(monthNum) - 1, 1);
+        const monthLastDay = new Date(parseInt(monthYear), parseInt(monthNum), 0).getDate();
+        const monthEndDate = new Date(parseInt(monthYear), parseInt(monthNum) - 1, monthLastDay, 23, 59, 59, 999);
+        
+        const storedReturn = storedReturnsMap.get(monthKey);
+        
+        if (!storedReturn) {
+          calculationPromises.push(
+            fetch('/api/calculate-complex-interest', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                member_id: parseInt(selectedMember),
+                start_date: monthStartDate.toISOString().split('T')[0],
+                end_date: monthEndDate.toISOString().split('T')[0]
+              })
+            })
+            .then(res => res.json())
+            .then(calcData => {
+              if (calcData.interest > 0) {
+                return {
+                  id: `calculated-${selectedMember}-${monthKey}`,
+                  type: 'return',
+                  transaction_type: 'return',
+                  member_id: parseInt(selectedMember),
+                  member_name: memberData.name || '',
+                  alias_name: memberData.alias_name || '',
+                  unique_number: memberData.unique_number || 0,
+                  village: memberData.village || '',
+                  town: memberData.town || '',
+                  percentage_of_return: memberData.percentage_of_return || 0,
+                  deposits: memberData.deposits || [],
+                  amount: calcData.interest,
+                  date: monthEndDate.toISOString().split('T')[0],
+                  interest_days: monthLastDay,
+                  notes: `Calculated for ${monthKey}`,
+                  is_calculated: true,
+                  month_key: monthKey
+                };
+              }
+              return null;
+            })
+            .catch(error => {
+              console.error(`Error calculating return for month ${monthKey}:`, error);
+              return null;
+            })
+          );
+        }
+      }
+      
+      // Wait for all calculations
+      const calculatedResults = await Promise.all(calculationPromises);
+      const validCalculated = calculatedResults.filter((r: any) => r !== null);
+      
+      // Combine stored and calculated returns
+      const allStatementReturns = [...storedReturns, ...validCalculated];
+      
+      // Sort by date (oldest first)
+      const sortedStatement = allStatementReturns.sort((a: any, b: any) => {
+        return new Date(a.date).getTime() - new Date(b.date).getTime();
+      });
+      
+      setStatementData(sortedStatement);
+      setShowStatementModal(true);
+    } catch (error) {
+      console.error('Error generating statement:', error);
+      alert('Error generating statement. Please try again.');
+    } finally {
+      setStatementLoading(false);
+    }
+  };
+
+  const exportStatementToExcel = () => {
+    if (statementData.length === 0 || !selectedMemberDetails) {
+      alert('No statement data to export');
+      return;
+    }
+
+    // Prepare data for Excel
+    const excelData = statementData.map((t, index) => {
+      const deposits = (t as any).deposits || [];
+      const totalDeposits = deposits.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0);
+      
+      const transDate = new Date(t.date);
+      const monthYear = transDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+      const paymentDate = `2nd ${monthYear}`;
+      
+      return {
+        'S.No': index + 1,
+        'Month': monthYear,
+        'Payment Date': paymentDate,
+        'Unique #': t.unique_number || '',
+        'Member Name': t.member_name,
+        'Alias Name': t.alias_name || '',
+        'Village': (t as any).village || '',
+        'Town': (t as any).town || '',
+        'Total Deposits (₹)': totalDeposits,
+        'Return Rate (%)': (t as any).percentage_of_return || '',
+        'Return Amount (₹)': Math.abs(t.amount),
+        'Interest Days': t.interest_days || ''
+      };
+    });
+
+    // Add summary row
+    const totalReturns = statementData.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    excelData.push({
+      'S.No': statementData.length + 1,
+      'Month': 'TOTAL',
+      'Payment Date': '',
+      'Unique #': '',
+      'Member Name': '',
+      'Alias Name': '',
+      'Village': '',
+      'Town': '',
+      'Total Deposits (₹)': '',
+      'Return Rate (%)': '',
+      'Return Amount (₹)': totalReturns,
+      'Interest Days': ''
+    });
+
+    // Create workbook and worksheet
+    const ws = XLSX.utils.json_to_sheet(excelData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Statement');
+
+    // Set column widths
+    ws['!cols'] = [
+      { wch: 6 },  // S.No
+      { wch: 20 }, // Month
+      { wch: 20 }, // Payment Date
+      { wch: 10 }, // Unique #
+      { wch: 25 }, // Member Name
+      { wch: 15 }, // Alias Name
+      { wch: 20 }, // Village
+      { wch: 20 }, // Town
+      { wch: 18 }, // Total Deposits
+      { wch: 12 }, // Return Rate
+      { wch: 18 }, // Return Amount
+      { wch: 12 }  // Interest Days
+    ];
+
+    // Generate filename
+    const memberName = selectedMemberDetails.name.replace(/[^a-zA-Z0-9]/g, '_');
+    const fileName = `Statement_${memberName}_${selectedMemberDetails.unique_number || ''}.xlsx`;
+
+    // Download file
+    XLSX.writeFile(wb, fileName);
   };
 
 
@@ -654,13 +857,30 @@ export default function MasterSheet() {
           </div>
           
           {(selectedMember) && (
-            <button
-              onClick={() => setSelectedMember('')}
-              className="btn btn-secondary"
-              style={{ fontSize: '14px', padding: '8px 16px', marginTop: '16px' }}
-            >
-              Clear Member Filter
-            </button>
+            <div style={{ display: 'flex', gap: '12px', marginTop: '16px', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => setSelectedMember('')}
+                className="btn btn-secondary"
+                style={{ fontSize: '14px', padding: '8px 16px' }}
+              >
+                Clear Member Filter
+              </button>
+              <button
+                onClick={generateMemberStatement}
+                className="btn btn-primary"
+                style={{ 
+                  fontSize: '14px', 
+                  padding: '8px 16px',
+                  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                  color: 'white',
+                  border: 'none',
+                  fontWeight: 600
+                }}
+                disabled={statementLoading}
+              >
+                {statementLoading ? 'Generating...' : 'Generate Complete Statement'}
+              </button>
+            </div>
           )}
         </div>
 
@@ -948,6 +1168,218 @@ export default function MasterSheet() {
         </div>
 
       </div>
+
+      {/* Statement Modal */}
+      {showStatementModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1000,
+            padding: '20px'
+          }}
+          onClick={() => setShowStatementModal(false)}
+        >
+          <div
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '16px',
+              padding: '32px',
+              maxWidth: '95%',
+              maxHeight: '90vh',
+              overflow: 'auto',
+              boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+              position: 'relative'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close button */}
+            <button
+              onClick={() => setShowStatementModal(false)}
+              style={{
+                position: 'absolute',
+                top: '16px',
+                right: '16px',
+                background: '#ef4444',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                width: '32px',
+                height: '32px',
+                cursor: 'pointer',
+                fontSize: '20px',
+                fontWeight: 'bold',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              ×
+            </button>
+
+            {/* Header */}
+            <div style={{ marginBottom: '24px' }}>
+              <h2 style={{ 
+                fontSize: '28px', 
+                fontWeight: 800,
+                marginBottom: '8px',
+                color: '#1e293b'
+              }}>
+                Complete Statement
+              </h2>
+              {selectedMemberDetails && (
+                <div style={{ color: '#64748b', fontSize: '16px' }}>
+                  <p style={{ margin: '4px 0' }}>
+                    <strong>Member:</strong> {selectedMemberDetails.name}
+                    {selectedMemberDetails.unique_number && ` (#${selectedMemberDetails.unique_number})`}
+                  </p>
+                  {selectedMemberDetails.alias_name && (
+                    <p style={{ margin: '4px 0' }}>
+                      <strong>Alias:</strong> {selectedMemberDetails.alias_name}
+                    </p>
+                  )}
+                  {(selectedMemberDetails.village || selectedMemberDetails.town) && (
+                    <p style={{ margin: '4px 0' }}>
+                      <strong>Location:</strong> {selectedMemberDetails.village || ''} {selectedMemberDetails.village && selectedMemberDetails.town ? '-' : ''} {selectedMemberDetails.town || ''}
+                    </p>
+                  )}
+                  <p style={{ margin: '4px 0' }}>
+                    <strong>Total Returns:</strong> {formatCurrency(statementData.reduce((sum, t) => sum + Math.abs(t.amount), 0))}
+                  </p>
+                  <p style={{ margin: '4px 0' }}>
+                    <strong>Total Months:</strong> {statementData.length}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Export button */}
+            <div style={{ marginBottom: '20px' }}>
+              <button
+                onClick={exportStatementToExcel}
+                className="btn btn-success"
+                style={{
+                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  color: 'white',
+                  border: 'none',
+                  padding: '12px 24px',
+                  fontSize: '16px',
+                  fontWeight: 700,
+                  borderRadius: '10px',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+                }}
+              >
+                Export Statement to Excel
+              </button>
+            </div>
+
+            {/* Statement Table */}
+            {statementData.length > 0 ? (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{
+                  width: '100%',
+                  borderCollapse: 'collapse',
+                  fontSize: '14px'
+                }}>
+                  <thead>
+                    <tr style={{ 
+                      background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                      color: 'white'
+                    }}>
+                      <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>S.No</th>
+                      <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Month</th>
+                      <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Payment Date</th>
+                      <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Total Deposits</th>
+                      <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Return Rate</th>
+                      <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Return Amount</th>
+                      <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Interest Days</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {statementData.map((transaction, index) => {
+                      const deposits = (transaction as any).deposits || [];
+                      const totalDeposits = deposits.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0);
+                      const transDate = new Date(transaction.date);
+                      const monthYear = transDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+                      const paymentDate = `2nd ${monthYear}`;
+
+                      return (
+                        <tr 
+                          key={`statement-${transaction.id}-${index}`}
+                          style={{
+                            borderBottom: '1px solid #e2e8f0',
+                            backgroundColor: index % 2 === 0 ? '#ffffff' : '#f8fafc'
+                          }}
+                        >
+                          <td style={{ padding: '12px', fontWeight: 600 }}>{index + 1}</td>
+                          <td style={{ padding: '12px', color: '#475569' }}>{monthYear}</td>
+                          <td style={{ padding: '12px', color: '#475569' }}>{paymentDate}</td>
+                          <td style={{ padding: '12px', fontWeight: 700, color: '#10b981' }}>
+                            {formatCurrency(totalDeposits)}
+                          </td>
+                          <td style={{ padding: '12px' }}>
+                            {(transaction as any).percentage_of_return ? (
+                              <span style={{
+                                background: '#f0fdf4',
+                                color: '#166534',
+                                padding: '6px 12px',
+                                borderRadius: '8px',
+                                fontSize: '14px',
+                                fontWeight: 700,
+                                border: '1px solid #bbf7d0'
+                              }}>
+                                {(transaction as any).percentage_of_return}%
+                              </span>
+                            ) : (
+                              <span style={{ color: '#94a3b8' }}>-</span>
+                            )}
+                          </td>
+                          <td style={{ padding: '12px', color: '#3b82f6', fontWeight: 800, fontSize: '16px' }}>
+                            {formatCurrency(Math.abs(transaction.amount))}
+                          </td>
+                          <td style={{ padding: '12px', color: '#64748b' }}>
+                            {transaction.interest_days || '-'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {/* Total row */}
+                    <tr style={{
+                      background: '#f1f5f9',
+                      fontWeight: 800,
+                      borderTop: '3px solid #6366f1'
+                    }}>
+                      <td colSpan={5} style={{ padding: '12px', textAlign: 'right', fontSize: '16px' }}>
+                        TOTAL:
+                      </td>
+                      <td style={{ padding: '12px', color: '#3b82f6', fontSize: '18px' }}>
+                        {formatCurrency(statementData.reduce((sum, t) => sum + Math.abs(t.amount), 0))}
+                      </td>
+                      <td style={{ padding: '12px' }}></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div style={{ 
+                textAlign: 'center', 
+                padding: '40px',
+                color: '#64748b'
+              }}>
+                No statement data available
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 }
