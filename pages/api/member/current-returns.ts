@@ -151,9 +151,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           currentWindow.start,
           currentWindow.end
         );
-        interestDays = 30;
+        const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+        interestDays = lastDay;
         periodType = 'current_month_projected';
-        periodInfo = `1st to 30th of ${today.toLocaleString('en-IN', { month: 'long', year: 'numeric' })} (Projected)`;
+        periodInfo = `1st to ${lastDay}th of ${today.toLocaleString('en-IN', { month: 'long', year: 'numeric' })} (Projected)`;
       }
     }
 

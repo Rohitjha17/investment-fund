@@ -35,10 +35,6 @@ export default function MasterSheet() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [members, setMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dateFilter, setDateFilter] = useState({
-    start_date: '',
-    end_date: ''
-  });
   const [selectedMember, setSelectedMember] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();

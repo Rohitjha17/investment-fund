@@ -60,12 +60,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const currentBalance = deposits.reduce((sum: number, d: any) => sum + d.amount, 0) - 
                           withdrawals.reduce((sum: number, w: any) => sum + w.amount, 0);
 
+    // Calculate actual days in period
+    const daysInPeriod = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
     return res.status(200).json({
       member_id: parseInt(member_id),
       interest: interest,
       principal: currentBalance,
       percentage: defaultPercentage,
-      calculation_period: '30 days',
+      calculation_period: `${daysInPeriod} days`,
       start_date: startDate.toISOString(),
       end_date: endDate.toISOString()
     });
