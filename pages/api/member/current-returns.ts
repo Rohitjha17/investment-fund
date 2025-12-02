@@ -93,7 +93,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       );
 
       periodType = 'current_month_first_deposit';
-      const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
       periodInfo = `${formatDate(startDate)} to ${lastDay}th of ${today.toLocaleString('en-IN', { month: 'long', year: 'numeric' })}`;
     } else {
       // No deposits in current month - use full month window
