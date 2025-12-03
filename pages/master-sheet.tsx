@@ -251,44 +251,46 @@ export default function MasterSheet() {
         return;
       }
 
-      // Get earliest deposit date
-      const depositDates = memberData.deposits.map((d: any) => new Date(d.deposit_date));
-      const earliestDepositDate = new Date(Math.min(...depositDates.map((d: Date) => d.getTime())));
-      const firstDepositMonth = new Date(earliestDepositDate.getFullYear(), earliestDepositDate.getMonth(), 1);
+      // SIMPLE LOGIC: Find first deposit month and last month
+      // Parse all deposit dates properly
+      const parsedDeposits = memberData.deposits.map((d: any) => {
+        const dateStr = String(d.deposit_date).split('T')[0];
+        const [year, month, day] = dateStr.split('-').map(Number);
+        return { ...d, year, month: month - 1, day }; // month is 0-indexed
+      });
       
-      // Get previous month (current month's payment happens next month, so we show up to previous month)
+      // Find earliest deposit
+      const sortedDeposits = [...parsedDeposits].sort((a, b) => {
+        if (a.year !== b.year) return a.year - b.year;
+        if (a.month !== b.month) return a.month - b.month;
+        return a.day - b.day;
+      });
+      
+      const firstDeposit = sortedDeposits[0];
+      const firstYear = firstDeposit.year;
+      const firstMonth = firstDeposit.month;
+      
+      // Last month = previous month (payment happens next month)
       const now = new Date();
-      // If today is before 2nd, don't include previous month either (payment not yet made)
-      // If today is on or after 2nd, include up to previous month
-      let lastPaidMonth: Date;
-      if (now.getDate() >= 2) {
-        // Payment for previous month has been made (on 2nd of this month)
-        lastPaidMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      } else {
-        // Payment for previous month not yet made (we're before 2nd)
-        lastPaidMonth = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+      let lastYear = now.getFullYear();
+      let lastMonth = now.getMonth() - 1;
+      if (lastMonth < 0) {
+        lastMonth = 11;
+        lastYear--;
       }
       
-      // Generate all months from first deposit to last paid month
-      const monthsToCalculate = getAllMonthsBetween(firstDepositMonth, lastPaidMonth);
+      // Generate all months from first deposit month to last month
+      const statementRows: any[] = [];
+      let currentYear = firstYear;
+      let currentMonth = firstMonth;
       
-      // Calculate returns for ALL months (no stored returns - always calculate fresh)
-      // Only calculate for months where member had deposits BEFORE that month ends
-      const calculationPromises = monthsToCalculate.map(async (monthKey) => {
-        const [monthYear, monthNum] = monthKey.split('-');
-        const monthStartDate = new Date(parseInt(monthYear), parseInt(monthNum) - 1, 1);
-        const monthLastDay = new Date(parseInt(monthYear), parseInt(monthNum), 0).getDate();
-        const monthEndDate = new Date(parseInt(monthYear), parseInt(monthNum) - 1, monthLastDay, 23, 59, 59, 999);
+      while (currentYear < lastYear || (currentYear === lastYear && currentMonth <= lastMonth)) {
+        const monthKey = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
         
-        // Check if member has any deposit on or before this month's end
-        const hasDepositInOrBeforeMonth = memberData.deposits.some((d: any) => {
-          const depositDate = new Date(d.deposit_date);
-          return depositDate <= monthEndDate;
-        });
-        
-        if (!hasDepositInOrBeforeMonth) {
-          return null; // Skip months before first deposit
-        }
+        // Calculate interest for this month
+        const monthStart = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01`;
+        const lastDay = new Date(currentYear, currentMonth + 1, 0).getDate();
+        const monthEnd = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
         
         try {
           const calcRes = await fetch('/api/calculate-complex-interest', {
@@ -296,18 +298,18 @@ export default function MasterSheet() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               member_id: parseInt(selectedMember),
-              start_date: monthStartDate.toISOString().split('T')[0],
-              end_date: monthEndDate.toISOString().split('T')[0]
+              start_date: monthStart,
+              end_date: monthEnd
             })
           });
           const calcData = await calcRes.json();
           
           if (calcData.interest > 0) {
-            return {
-              id: `calculated-${selectedMember}-${monthKey}`,
-              type: 'return',
-              transaction_type: 'return',
-              member_id: parseInt(selectedMember),
+            statementRows.push({
+              id: `stmt-${selectedMember}-${monthKey}`,
+              month_key: monthKey,
+              year: currentYear,
+              month: currentMonth,
               member_name: memberData.name || '',
               alias_name: memberData.alias_name || '',
               unique_number: memberData.unique_number || 0,
@@ -316,29 +318,23 @@ export default function MasterSheet() {
               percentage_of_return: memberData.percentage_of_return || 0,
               deposits: memberData.deposits || [],
               amount: calcData.interest,
-              date: monthEndDate.toISOString().split('T')[0],
-              interest_days: 30, // Hardcoded 30 days as per client requirement
-              notes: `Calculated for ${monthKey}`,
-              is_calculated: true,
-              month_key: monthKey
-            };
+              date: monthEnd,
+              interest_days: 30
+            });
           }
         } catch (error) {
-          console.error(`Error calculating return for month ${monthKey}:`, error);
+          console.error(`Error calculating for ${monthKey}:`, error);
         }
-        return null;
-      });
+        
+        // Move to next month
+        currentMonth++;
+        if (currentMonth > 11) {
+          currentMonth = 0;
+          currentYear++;
+        }
+      }
       
-      // Wait for all calculations
-      const results = await Promise.all(calculationPromises);
-      const validResults = results.filter((r: any) => r !== null) as Transaction[];
-      
-      // Sort by date (oldest first)
-      const sortedStatement = validResults.sort((a: Transaction, b: Transaction) => {
-        return new Date(a.date).getTime() - new Date(b.date).getTime();
-      });
-      
-      setStatementData(sortedStatement);
+      setStatementData(statementRows as Transaction[]);
       setShowStatementModal(true);
     } catch (error) {
       console.error('Error generating statement:', error);
@@ -355,22 +351,28 @@ export default function MasterSheet() {
     }
 
     // Prepare data for Excel
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                       'July', 'August', 'September', 'October', 'November', 'December'];
+    
     const excelData = statementData.map((t, index) => {
       const deposits = (t as any).deposits || [];
-      const transDate = new Date(t.date);
-      const transMonth = transDate.getMonth();
-      const transYear = transDate.getFullYear();
-      const monthYear = transDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+      const transYear = (t as any).year || new Date(t.date).getFullYear();
+      const transMonth = (t as any).month !== undefined ? (t as any).month : new Date(t.date).getMonth();
+      const monthYear = `${monthNames[transMonth]} ${transYear}`;
       
       // Payment is made on 2nd of NEXT month
-      const nextMonth = new Date(transYear, transMonth + 1, 2);
-      const paymentMonthYear = nextMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
-      const paymentDate = `2nd ${paymentMonthYear}`;
+      let paymentMonth = transMonth + 1;
+      let paymentYear = transYear;
+      if (paymentMonth > 11) {
+        paymentMonth = 0;
+        paymentYear++;
+      }
+      const paymentDate = `2nd ${monthNames[paymentMonth]} ${paymentYear}`;
       
       // Filter deposits made in this specific month
       const depositsThisMonth = deposits.filter((d: any) => {
         if (!d.deposit_date) return false;
-        const dateStr = d.deposit_date.split('T')[0];
+        const dateStr = String(d.deposit_date).split('T')[0];
         const parts = dateStr.split('-');
         const depYear = parseInt(parts[0]);
         const depMonth = parseInt(parts[1]) - 1;
@@ -382,22 +384,20 @@ export default function MasterSheet() {
       
       // Get investment dates for this month
       const investmentDates = depositsThisMonth.map((d: any) => {
-        const dateStr = d.deposit_date.split('T')[0];
+        const dateStr = String(d.deposit_date).split('T')[0];
         const parts = dateStr.split('-');
-        const date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-        return date.toLocaleDateString('en-IN');
+        return `${parts[2]}-${monthNames[parseInt(parts[1]) - 1].substring(0, 3)}-${parts[0]}`;
       }).join(', ');
       
       // Calculate total investment till this month
+      const transYearMonth = transYear * 12 + transMonth;
       const depositsTillThisMonth = deposits.filter((d: any) => {
         if (!d.deposit_date) return false;
-        const dateStr = d.deposit_date.split('T')[0];
+        const dateStr = String(d.deposit_date).split('T')[0];
         const parts = dateStr.split('-');
         const depYear = parseInt(parts[0]);
         const depMonth = parseInt(parts[1]) - 1;
-        const depYearMonth = depYear * 12 + depMonth;
-        const transYearMonth = transYear * 12 + transMonth;
-        return depYearMonth <= transYearMonth;
+        return (depYear * 12 + depMonth) <= transYearMonth;
       });
       const totalInvestmentTillDate = depositsTillThisMonth.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0);
       
@@ -1329,47 +1329,54 @@ export default function MasterSheet() {
                   <tbody>
                     {statementData.map((transaction, index) => {
                       const deposits = (transaction as any).deposits || [];
-                      const transDate = new Date(transaction.date);
-                      const transMonth = transDate.getMonth();
-                      const transYear = transDate.getFullYear();
-                      const monthYear = transDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
                       
-                      // Payment is made on 2nd of NEXT month (not same month)
-                      const nextMonth = new Date(transYear, transMonth + 1, 2);
-                      const paymentMonthYear = nextMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
-                      const paymentDate = `2nd ${paymentMonthYear}`;
+                      // Use month/year directly from transaction if available
+                      const transYear = (transaction as any).year || new Date(transaction.date).getFullYear();
+                      const transMonth = (transaction as any).month !== undefined ? (transaction as any).month : new Date(transaction.date).getMonth();
+                      
+                      // Format month name
+                      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                                         'July', 'August', 'September', 'October', 'November', 'December'];
+                      const monthYear = `${monthNames[transMonth]} ${transYear}`;
+                      
+                      // Payment is made on 2nd of NEXT month
+                      let paymentMonth = transMonth + 1;
+                      let paymentYear = transYear;
+                      if (paymentMonth > 11) {
+                        paymentMonth = 0;
+                        paymentYear++;
+                      }
+                      const paymentDate = `2nd ${monthNames[paymentMonth]} ${paymentYear}`;
                       
                       // Filter deposits made in this specific month
                       const depositsThisMonth = deposits.filter((d: any) => {
                         if (!d.deposit_date) return false;
-                        const dateStr = d.deposit_date.split('T')[0]; // Handle ISO format
+                        const dateStr = String(d.deposit_date).split('T')[0];
                         const parts = dateStr.split('-');
                         const depYear = parseInt(parts[0]);
-                        const depMonth = parseInt(parts[1]) - 1; // 0-indexed
+                        const depMonth = parseInt(parts[1]) - 1;
                         return depMonth === transMonth && depYear === transYear;
                       });
                       
                       // Calculate deposits for this month only
                       const depositAmountThisMonth = depositsThisMonth.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0);
                       
-                      // Get investment dates for this month - formatted nicely
+                      // Get investment dates for this month
                       const investmentDates = depositsThisMonth.map((d: any) => {
-                        const dateStr = d.deposit_date.split('T')[0];
+                        const dateStr = String(d.deposit_date).split('T')[0];
                         const parts = dateStr.split('-');
-                        const date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-                        return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+                        return `${parts[2]} ${monthNames[parseInt(parts[1]) - 1].substring(0, 3)} ${parts[0]}`;
                       }).join(', ');
                       
                       // Calculate total investment till this month (cumulative)
+                      const transYearMonth = transYear * 12 + transMonth;
                       const depositsTillThisMonth = deposits.filter((d: any) => {
                         if (!d.deposit_date) return false;
-                        const dateStr = d.deposit_date.split('T')[0];
+                        const dateStr = String(d.deposit_date).split('T')[0];
                         const parts = dateStr.split('-');
                         const depYear = parseInt(parts[0]);
                         const depMonth = parseInt(parts[1]) - 1;
-                        const depYearMonth = depYear * 12 + depMonth;
-                        const transYearMonth = transYear * 12 + transMonth;
-                        return depYearMonth <= transYearMonth;
+                        return (depYear * 12 + depMonth) <= transYearMonth;
                       });
                       const totalInvestmentTillDate = depositsTillThisMonth.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0);
 
