@@ -262,11 +262,22 @@ export default function MasterSheet() {
       const monthsToCalculate = getAllMonthsBetween(firstDepositMonth, currentMonth);
       
       // Calculate returns for ALL months (no stored returns - always calculate fresh)
+      // Only calculate for months where member had deposits BEFORE that month ends
       const calculationPromises = monthsToCalculate.map(async (monthKey) => {
         const [monthYear, monthNum] = monthKey.split('-');
         const monthStartDate = new Date(parseInt(monthYear), parseInt(monthNum) - 1, 1);
         const monthLastDay = new Date(parseInt(monthYear), parseInt(monthNum), 0).getDate();
         const monthEndDate = new Date(parseInt(monthYear), parseInt(monthNum) - 1, monthLastDay, 23, 59, 59, 999);
+        
+        // Check if member has any deposit on or before this month's end
+        const hasDepositInOrBeforeMonth = memberData.deposits.some((d: any) => {
+          const depositDate = new Date(d.deposit_date);
+          return depositDate <= monthEndDate;
+        });
+        
+        if (!hasDepositInOrBeforeMonth) {
+          return null; // Skip months before first deposit
+        }
         
         try {
           const calcRes = await fetch('/api/calculate-complex-interest', {
