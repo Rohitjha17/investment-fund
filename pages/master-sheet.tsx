@@ -358,27 +358,48 @@ export default function MasterSheet() {
     const excelData = statementData.map((t, index) => {
       const deposits = (t as any).deposits || [];
       const transDate = new Date(t.date);
+      const transMonth = transDate.getMonth();
+      const transYear = transDate.getFullYear();
       const monthYear = transDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
       
       // Payment is made on 2nd of NEXT month
-      const nextMonth = new Date(transDate.getFullYear(), transDate.getMonth() + 1, 2);
+      const nextMonth = new Date(transYear, transMonth + 1, 2);
       const paymentMonthYear = nextMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
       const paymentDate = `2nd ${paymentMonthYear}`;
       
       // Filter deposits made in this specific month
       const depositsThisMonth = deposits.filter((d: any) => {
-        const depositDate = new Date(d.deposit_date);
-        return depositDate.getMonth() === transDate.getMonth() && 
-               depositDate.getFullYear() === transDate.getFullYear();
+        if (!d.deposit_date) return false;
+        const dateStr = d.deposit_date.split('T')[0];
+        const parts = dateStr.split('-');
+        const depYear = parseInt(parts[0]);
+        const depMonth = parseInt(parts[1]) - 1;
+        return depMonth === transMonth && depYear === transYear;
       });
       
       // Calculate deposits for this month only
       const depositAmountThisMonth = depositsThisMonth.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0);
       
       // Get investment dates for this month
-      const investmentDates = depositsThisMonth.map((d: any) => 
-        new Date(d.deposit_date).toLocaleDateString('en-IN')
-      ).join(', ');
+      const investmentDates = depositsThisMonth.map((d: any) => {
+        const dateStr = d.deposit_date.split('T')[0];
+        const parts = dateStr.split('-');
+        const date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        return date.toLocaleDateString('en-IN');
+      }).join(', ');
+      
+      // Calculate total investment till this month
+      const depositsTillThisMonth = deposits.filter((d: any) => {
+        if (!d.deposit_date) return false;
+        const dateStr = d.deposit_date.split('T')[0];
+        const parts = dateStr.split('-');
+        const depYear = parseInt(parts[0]);
+        const depMonth = parseInt(parts[1]) - 1;
+        const depYearMonth = depYear * 12 + depMonth;
+        const transYearMonth = transYear * 12 + transMonth;
+        return depYearMonth <= transYearMonth;
+      });
+      const totalInvestmentTillDate = depositsTillThisMonth.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0);
       
       return {
         'S.No': index + 1,
@@ -386,9 +407,9 @@ export default function MasterSheet() {
         'Payment Date': paymentDate,
         'Investment Date': investmentDates || '-',
         'Deposit This Month (₹)': depositAmountThisMonth > 0 ? depositAmountThisMonth : '-',
+        'Total Investment (₹)': totalInvestmentTillDate,
         'Return Rate (%)': (t as any).percentage_of_return || '',
-        'Return Amount (₹)': Math.abs(t.amount),
-        'Interest Days': 30 // Always 30 days as per client requirement
+        'Return Amount (₹)': Math.abs(t.amount)
       };
     });
 
@@ -400,10 +421,10 @@ export default function MasterSheet() {
       'Month': 'TOTAL',
       'Payment Date': '',
       'Investment Date': '',
-      'Deposit This Month (₹)': totalDeposits,
+      'Deposit This Month (₹)': '',
+      'Total Investment (₹)': totalDeposits,
       'Return Rate (%)': '',
-      'Return Amount (₹)': totalReturns,
-      'Interest Days': 0
+      'Return Amount (₹)': totalReturns
     });
 
     // Create workbook and worksheet
@@ -414,13 +435,13 @@ export default function MasterSheet() {
     // Set column widths
     ws['!cols'] = [
       { wch: 6 },  // S.No
-      { wch: 20 }, // Month
+      { wch: 18 }, // Month
       { wch: 20 }, // Payment Date
-      { wch: 20 }, // Investment Date
+      { wch: 18 }, // Investment Date
       { wch: 20 }, // Deposit This Month
+      { wch: 20 }, // Total Investment
       { wch: 12 }, // Return Rate
-      { wch: 18 }, // Return Amount
-      { wch: 12 }  // Interest Days
+      { wch: 18 }  // Return Amount
     ];
 
     // Generate filename
@@ -1300,36 +1321,57 @@ export default function MasterSheet() {
                       <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Payment Date</th>
                       <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Investment Date</th>
                       <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Deposit This Month</th>
+                      <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Total Investment</th>
                       <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Return Rate</th>
                       <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Return Amount</th>
-                      <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Interest Days</th>
                     </tr>
                   </thead>
                   <tbody>
                     {statementData.map((transaction, index) => {
                       const deposits = (transaction as any).deposits || [];
                       const transDate = new Date(transaction.date);
+                      const transMonth = transDate.getMonth();
+                      const transYear = transDate.getFullYear();
                       const monthYear = transDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
                       
                       // Payment is made on 2nd of NEXT month (not same month)
-                      const nextMonth = new Date(transDate.getFullYear(), transDate.getMonth() + 1, 2);
+                      const nextMonth = new Date(transYear, transMonth + 1, 2);
                       const paymentMonthYear = nextMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
                       const paymentDate = `2nd ${paymentMonthYear}`;
                       
                       // Filter deposits made in this specific month
                       const depositsThisMonth = deposits.filter((d: any) => {
-                        const depositDate = new Date(d.deposit_date);
-                        return depositDate.getMonth() === transDate.getMonth() && 
-                               depositDate.getFullYear() === transDate.getFullYear();
+                        if (!d.deposit_date) return false;
+                        const dateStr = d.deposit_date.split('T')[0]; // Handle ISO format
+                        const parts = dateStr.split('-');
+                        const depYear = parseInt(parts[0]);
+                        const depMonth = parseInt(parts[1]) - 1; // 0-indexed
+                        return depMonth === transMonth && depYear === transYear;
                       });
                       
                       // Calculate deposits for this month only
                       const depositAmountThisMonth = depositsThisMonth.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0);
                       
-                      // Get investment dates for this month
-                      const investmentDates = depositsThisMonth.map((d: any) => 
-                        new Date(d.deposit_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-                      ).join(', ');
+                      // Get investment dates for this month - formatted nicely
+                      const investmentDates = depositsThisMonth.map((d: any) => {
+                        const dateStr = d.deposit_date.split('T')[0];
+                        const parts = dateStr.split('-');
+                        const date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+                        return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+                      }).join(', ');
+                      
+                      // Calculate total investment till this month (cumulative)
+                      const depositsTillThisMonth = deposits.filter((d: any) => {
+                        if (!d.deposit_date) return false;
+                        const dateStr = d.deposit_date.split('T')[0];
+                        const parts = dateStr.split('-');
+                        const depYear = parseInt(parts[0]);
+                        const depMonth = parseInt(parts[1]) - 1;
+                        const depYearMonth = depYear * 12 + depMonth;
+                        const transYearMonth = transYear * 12 + transMonth;
+                        return depYearMonth <= transYearMonth;
+                      });
+                      const totalInvestmentTillDate = depositsTillThisMonth.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0);
 
                       return (
                         <tr 
@@ -1342,11 +1384,14 @@ export default function MasterSheet() {
                           <td style={{ padding: '12px', fontWeight: 600 }}>{index + 1}</td>
                           <td style={{ padding: '12px', color: '#475569' }}>{monthYear}</td>
                           <td style={{ padding: '12px', color: '#475569' }}>{paymentDate}</td>
-                          <td style={{ padding: '12px', color: '#475569' }}>
+                          <td style={{ padding: '12px', color: '#475569', fontWeight: investmentDates ? 600 : 400 }}>
                             {investmentDates || <span style={{ color: '#94a3b8' }}>-</span>}
                           </td>
                           <td style={{ padding: '12px', fontWeight: 700, color: depositAmountThisMonth > 0 ? '#10b981' : '#94a3b8' }}>
                             {depositAmountThisMonth > 0 ? formatCurrency(depositAmountThisMonth) : '-'}
+                          </td>
+                          <td style={{ padding: '12px', fontWeight: 700, color: '#8b5cf6' }}>
+                            {formatCurrency(totalInvestmentTillDate)}
                           </td>
                           <td style={{ padding: '12px' }}>
                             {(transaction as any).percentage_of_return ? (
@@ -1368,9 +1413,6 @@ export default function MasterSheet() {
                           <td style={{ padding: '12px', color: '#3b82f6', fontWeight: 800, fontSize: '16px' }}>
                             {formatCurrency(Math.abs(transaction.amount))}
                           </td>
-                          <td style={{ padding: '12px', color: '#64748b' }}>
-                            {transaction.interest_days || '-'}
-                          </td>
                         </tr>
                       );
                     })}
@@ -1380,13 +1422,12 @@ export default function MasterSheet() {
                       fontWeight: 800,
                       borderTop: '3px solid #6366f1'
                     }}>
-                      <td colSpan={6} style={{ padding: '12px', textAlign: 'right', fontSize: '16px' }}>
-                        TOTAL:
+                      <td colSpan={7} style={{ padding: '12px', textAlign: 'right', fontSize: '16px' }}>
+                        TOTAL RETURNS:
                       </td>
                       <td style={{ padding: '12px', color: '#3b82f6', fontSize: '18px' }}>
                         {formatCurrency(statementData.reduce((sum, t) => sum + Math.abs(t.amount), 0))}
                       </td>
-                      <td style={{ padding: '12px' }}></td>
                     </tr>
                   </tbody>
                 </table>
