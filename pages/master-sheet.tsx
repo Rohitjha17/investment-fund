@@ -307,10 +307,10 @@ export default function MasterSheet() {
       
       // Wait for all calculations
       const results = await Promise.all(calculationPromises);
-      const validResults = results.filter((r): r is Transaction => r !== null);
+      const validResults = results.filter((r: any) => r !== null) as Transaction[];
       
       // Sort by date (oldest first)
-      const sortedStatement = validResults.sort((a, b) => {
+      const sortedStatement = validResults.sort((a: Transaction, b: Transaction) => {
         return new Date(a.date).getTime() - new Date(b.date).getTime();
       });
       
