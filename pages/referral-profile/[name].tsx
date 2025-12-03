@@ -9,10 +9,11 @@ interface ReferralData {
   breakdown: Array<{
     member_id: number;
     member_name: string;
-    interest_earned: number;
+    principal_amount: number;
     referral_percent: number;
     commission_amount: number;
     is_direct: boolean;
+    investment_date?: string;
   }>;
 }
 
@@ -403,21 +404,12 @@ export default function ReferralProfile() {
                     </th>
                     <th style={{ 
                       padding: '16px', 
-                      textAlign: 'center', 
-                      fontWeight: 700, 
-                      color: '#374151',
-                      fontSize: '14px'
-                    }}>
-                      Type
-                    </th>
-                    <th style={{ 
-                      padding: '16px', 
                       textAlign: 'right', 
                       fontWeight: 700, 
                       color: '#374151',
                       fontSize: '14px'
                     }}>
-                      Interest Earned
+                      Principal Amount
                     </th>
                     <th style={{ 
                       padding: '16px', 
@@ -478,19 +470,6 @@ export default function ReferralProfile() {
                         </p>
                       </div>
                     </td>
-                    <td style={{ padding: '16px', textAlign: 'center' }}>
-                      <span style={{
-                        background: item.is_direct ? '#f0f9ff' : '#fef3c7',
-                        color: item.is_direct ? '#0369a1' : '#92400e',
-                        padding: '4px 8px',
-                        borderRadius: '6px',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        border: item.is_direct ? '1px solid #bae6fd' : '1px solid #fde68a'
-                      }}>
-                        {item.is_direct ? 'Direct' : 'Indirect'}
-                      </span>
-                    </td>
                     <td style={{ 
                       padding: '16px', 
                       textAlign: 'right',
@@ -498,7 +477,7 @@ export default function ReferralProfile() {
                       color: '#059669',
                       fontSize: '15px'
                     }}>
-                      {formatCurrency(item.interest_earned)}
+                      {formatCurrency(item.principal_amount || 0)}
                     </td>
                     <td style={{ padding: '16px', textAlign: 'center' }}>
                       <span style={{
