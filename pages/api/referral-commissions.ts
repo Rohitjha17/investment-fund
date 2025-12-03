@@ -129,10 +129,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // Investment was made in this month - calculate days from investment date+1 to end of month
         const investmentDate = new Date(earliestDepositDate);
         investmentDate.setHours(0, 0, 0, 0);
-        // Calculate actual last day of the month (28/29/30/31)
-        const daysInMonth = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0).getDate();
+        // HARDCODED: Always use 30 days per month as per client requirement
+        const daysInMonth = 30;
         // Interest starts from next day after deposit, so calculate from deposit date + 1
-        const daysFromInvestment = daysInMonth - investmentDate.getDate(); // Days from (deposit date + 1) to end of month
+        const daysFromInvestment = Math.min(30 - investmentDate.getDate(), 30); // Days from (deposit date + 1) to 30th
         const proratedFactor = daysFromInvestment / daysInMonth;
         commissionAmount = commissionAmount * proratedFactor;
       }

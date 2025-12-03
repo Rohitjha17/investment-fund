@@ -67,7 +67,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // calculateComplexInterest internally handles (deposit date + 1) for each deposit
       // So old deposits will calculate from 1st, new deposits from their date + 1
       
-      interestDays = lastDay;
+      interestDays = 30; // Hardcoded 30 days as per client requirement
 
       // Calculate interest for current month (use 1st of month as start)
       returnAmount = calculateComplexInterest(
@@ -88,7 +88,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       );
 
       periodType = 'current_month_with_new_deposits';
-      periodInfo = `1st to ${lastDay}th of ${today.toLocaleString('en-IN', { month: 'long', year: 'numeric' })} (includes new deposits)`;
+      periodInfo = `1st to 30th of ${today.toLocaleString('en-IN', { month: 'long', year: 'numeric' })} (includes new deposits)`;
     } else {
       // No deposits in current month - use full month window
       if (isPastSecond) {
@@ -123,10 +123,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             currentWindow.start,
             currentWindow.end
           );
-          const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-          interestDays = lastDay;
+          interestDays = 30; // Hardcoded 30 days as per client requirement
           periodType = 'current_month_full';
-          periodInfo = `1st to ${lastDay}th of ${today.toLocaleString('en-IN', { month: 'long', year: 'numeric' })}`;
+          periodInfo = `1st to 30th of ${today.toLocaleString('en-IN', { month: 'long', year: 'numeric' })}`;
         }
       } else {
         // Before 2nd - calculate what will be the return
@@ -146,10 +145,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           currentWindow.start,
           currentWindow.end
         );
-        const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-        interestDays = lastDay;
+        interestDays = 30; // Hardcoded 30 days as per client requirement
         periodType = 'current_month_projected';
-        periodInfo = `1st to ${lastDay}th of ${today.toLocaleString('en-IN', { month: 'long', year: 'numeric' })} (Projected)`;
+        periodInfo = `1st to 30th of ${today.toLocaleString('en-IN', { month: 'long', year: 'numeric' })} (Projected)`;
       }
     }
 

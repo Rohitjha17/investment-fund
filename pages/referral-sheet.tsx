@@ -29,6 +29,8 @@ interface ReferralData {
 export default function ReferralSheet() {
   const router = useRouter();
   const [referralData, setReferralData] = useState<ReferralData | null>(null);
+  const [members, setMembers] = useState<any[]>([]);
+  const [selectedMember, setSelectedMember] = useState('');
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(15);
@@ -50,12 +52,23 @@ export default function ReferralSheet() {
 
   useEffect(() => {
     checkAuth();
+    fetchMembers();
   }, []);
 
   useEffect(() => {
     fetchReferralData();
     setCurrentPage(1); // Reset to first page when month changes
   }, [selectedMonth]);
+
+  const fetchMembers = async () => {
+    try {
+      const res = await fetch('/api/members');
+      const data = await res.json();
+      setMembers(data);
+    } catch (error) {
+      console.error('Error fetching members:', error);
+    }
+  };
 
   const checkAuth = async () => {
     const res = await fetch('/api/auth/check');
@@ -108,10 +121,21 @@ export default function ReferralSheet() {
   const getFlattenedData = () => {
     if (!referralData) return [];
     
+    // First, filter commissions by selected member if any
+    let filteredCommissions = referralData.referral_commissions;
+    if (selectedMember) {
+      filteredCommissions = referralData.referral_commissions
+        .map(commission => ({
+          ...commission,
+          breakdown: commission.breakdown.filter(b => b.member_id === parseInt(selectedMember))
+        }))
+        .filter(commission => commission.breakdown.length > 0);
+    }
+    
     if (groupByReferrer) {
       // Group by referrer name - show totals for each referrer
       const grouped: Record<string, any> = {};
-      referralData.referral_commissions.forEach(commission => {
+      filteredCommissions.forEach(commission => {
         const key = commission.referrer_name.toLowerCase().trim();
         if (!grouped[key]) {
           grouped[key] = {
@@ -123,7 +147,7 @@ export default function ReferralSheet() {
           };
         }
         grouped[key].referred_count += commission.referred_count;
-        grouped[key].total_commission += commission.total_commission;
+        grouped[key].total_commission += commission.breakdown.reduce((sum: number, b: any) => sum + b.commission_amount, 0);
         grouped[key].member_count += commission.breakdown.length;
         grouped[key].total_principal += commission.breakdown.reduce((sum: number, b: any) => sum + b.principal_amount, 0);
       });
@@ -131,7 +155,7 @@ export default function ReferralSheet() {
     }
     
     const flattened: any[] = [];
-    referralData.referral_commissions.forEach(commission => {
+    filteredCommissions.forEach(commission => {
       commission.breakdown.forEach(breakdown => {
         flattened.push({
           referrer_name: commission.referrer_name,
@@ -398,27 +422,62 @@ export default function ReferralSheet() {
           </div>
         </div>
 
-        {/* Month Selector */}
+        {/* Month and Member Selector */}
         <div className="card" style={{ marginBottom: '24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-            <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700 }}>Select Month</h3>
-            <input
-              type="month"
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              style={{
-                padding: '12px 16px',
-                fontSize: '16px',
-                border: '2px solid #e2e8f0',
-                borderRadius: '12px',
-                background: '#f8fafc',
-                fontWeight: 600,
-                cursor: 'pointer'
-              }}
-              min="2010-01"
-              max={`${new Date().getFullYear()}-12`}
-            />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '16px' }}>
+            <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700 }}>Filters</h3>
           </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label>Select Month *</label>
+              <input
+                type="month"
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                style={{
+                  padding: '12px 16px',
+                  fontSize: '16px',
+                  border: '2px solid #e2e8f0',
+                  borderRadius: '12px',
+                  background: '#f8fafc',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  width: '100%'
+                }}
+                min="2010-01"
+                max={`${new Date().getFullYear()}-12`}
+              />
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label>Filter by Member</label>
+              <select
+                value={selectedMember}
+                onChange={(e) => {
+                  setSelectedMember(e.target.value);
+                  setCurrentPage(1);
+                }}
+                style={{ fontSize: '16px', padding: '12px', width: '100%' }}
+              >
+                <option value="">All Members</option>
+                {members.map(member => (
+                  <option key={member.id} value={member.id}>
+                    {member.name} {member.unique_number && `(#${member.unique_number})`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          {selectedMember && (
+            <div style={{ marginTop: '16px' }}>
+              <button
+                onClick={() => setSelectedMember('')}
+                className="btn btn-secondary"
+                style={{ fontSize: '14px', padding: '8px 16px' }}
+              >
+                Clear Member Filter
+              </button>
+            </div>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', flexWrap: 'wrap', gap: '16px' }}>
             <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>
               Commission is calculated on <strong>Principal Amount</strong> (Total Deposits - Total Withdrawals) × Referral %

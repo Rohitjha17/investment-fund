@@ -120,7 +120,10 @@ export function calculateComplexInterest(
     if (effectiveStart >= effectiveEnd) return;
     
     // Calculate days - add 1 to include both start and end dates (inclusive)
-    const days = Math.floor((effectiveEnd.getTime() - effectiveStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    let days = Math.floor((effectiveEnd.getTime() - effectiveStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    
+    // HARDCODED: Cap days at 30 as per client requirement (all months treated as 30 days)
+    days = Math.min(days, 30);
     
     if (days > 0) {
       const interest = calculateInterestSimple(segment.amount, segment.rate, days);

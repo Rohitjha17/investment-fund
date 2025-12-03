@@ -46,6 +46,8 @@ export default function MasterSheet() {
     paymentDate: false,
     memberDetails: false,
     location: false,
+    investmentDate: false,
+    modeOfPayment: false,
     totalDeposits: false,
     returnRate: false,
     returnAmount: false
@@ -168,7 +170,7 @@ export default function MasterSheet() {
               deposits: member.deposits || [],
               amount: calcData.interest,
               date: monthEndDate.toISOString().split('T')[0],
-              interest_days: lastDay,
+              interest_days: 30, // Hardcoded 30 days as per client requirement
               notes: `Calculated for ${selectedMonth}`,
               is_calculated: true,
               month_key: selectedMonth
@@ -306,7 +308,7 @@ export default function MasterSheet() {
               deposits: memberData.deposits || [],
               amount: calcData.interest,
               date: monthEndDate.toISOString().split('T')[0],
-              interest_days: monthLastDay,
+              interest_days: 30, // Hardcoded 30 days as per client requirement
               notes: `Calculated for ${monthKey}`,
               is_calculated: true,
               month_key: monthKey
@@ -592,6 +594,20 @@ export default function MasterSheet() {
         rowData['Village'] = (t as any).village || '';
         rowData['Town'] = (t as any).town || '';
       }
+      if (!columnFilters.investmentDate) {
+        const sortedDeposits = [...deposits].sort((a: any, b: any) => 
+          new Date(a.deposit_date).getTime() - new Date(b.deposit_date).getTime()
+        );
+        const firstDeposit = sortedDeposits[0];
+        rowData['Date of Investment'] = firstDeposit ? new Date(firstDeposit.deposit_date).toLocaleDateString('en-IN') : '';
+      }
+      if (!columnFilters.modeOfPayment) {
+        const sortedDeposits = [...deposits].sort((a: any, b: any) => 
+          new Date(a.deposit_date).getTime() - new Date(b.deposit_date).getTime()
+        );
+        const firstDeposit = sortedDeposits[0];
+        rowData['Mode of Payment'] = firstDeposit?.mode_of_payment || '';
+      }
       if (!columnFilters.totalDeposits) {
         rowData['Total Deposits (₹)'] = totalDeposits;
       }
@@ -623,6 +639,8 @@ export default function MasterSheet() {
       colWidths.push({ wch: 20 }); // Village
       colWidths.push({ wch: 20 }); // Town
     }
+    if (!columnFilters.investmentDate) colWidths.push({ wch: 18 }); // Date of Investment
+    if (!columnFilters.modeOfPayment) colWidths.push({ wch: 18 }); // Mode of Payment
     if (!columnFilters.totalDeposits) colWidths.push({ wch: 18 }); // Total Deposits
     if (!columnFilters.returnRate) colWidths.push({ wch: 12 }); // Return Rate
     if (!columnFilters.returnAmount) colWidths.push({ wch: 18 }); // Return Amount
@@ -819,6 +837,7 @@ export default function MasterSheet() {
               <button
                 onClick={() => setColumnFilters({
                   paymentDate: false, memberDetails: false, location: false,
+                  investmentDate: false, modeOfPayment: false,
                   totalDeposits: false, returnRate: false, returnAmount: false
                 })}
                 className="btn btn-secondary"
@@ -829,6 +848,7 @@ export default function MasterSheet() {
               <button
                 onClick={() => setColumnFilters({
                   paymentDate: true, memberDetails: true, location: true,
+                  investmentDate: true, modeOfPayment: true,
                   totalDeposits: true, returnRate: true, returnAmount: true
                 })}
                 className="btn btn-secondary"
@@ -852,6 +872,8 @@ export default function MasterSheet() {
               paymentDate: 'Payment Date',
               memberDetails: 'Member Details',
               location: 'Village - Town',
+              investmentDate: 'Date of Investment',
+              modeOfPayment: 'Mode of Payment',
               totalDeposits: 'Total Deposits',
               returnRate: 'Return Rate',
               returnAmount: 'Return Amount'
@@ -948,6 +970,8 @@ export default function MasterSheet() {
                   <th>Month</th>
                   {!columnFilters.memberDetails && <th>Member Details</th>}
                   {!columnFilters.location && <th>Village - Town</th>}
+                  {!columnFilters.investmentDate && <th>Date of Investment</th>}
+                  {!columnFilters.modeOfPayment && <th>Mode of Payment</th>}
                   {!columnFilters.totalDeposits && <th>Total Deposits</th>}
                   {!columnFilters.returnRate && <th>Return Rate</th>}
                   {!columnFilters.returnAmount && <th>Return Amount</th>}
@@ -1047,6 +1071,36 @@ export default function MasterSheet() {
                               ? `${(transaction as any).village} - ${(transaction as any).town}`
                               : (transaction as any).village || (transaction as any).town || 
                                 <span style={{ color: '#94a3b8' }}>-</span>}
+                          </td>
+                        )}
+                        {!columnFilters.investmentDate && (
+                          <td style={{ fontSize: '13px', color: '#475569' }}>
+                            {(() => {
+                              const deposits = (transaction as any).deposits || [];
+                              if (deposits.length === 0) return <span style={{ color: '#94a3b8' }}>-</span>;
+                              const sortedDeposits = [...deposits].sort((a: any, b: any) => 
+                                new Date(a.deposit_date).getTime() - new Date(b.deposit_date).getTime()
+                              );
+                              const firstDeposit = sortedDeposits[0];
+                              return new Date(firstDeposit.deposit_date).toLocaleDateString('en-IN', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric'
+                              });
+                            })()}
+                          </td>
+                        )}
+                        {!columnFilters.modeOfPayment && (
+                          <td style={{ fontSize: '13px', color: '#475569' }}>
+                            {(() => {
+                              const deposits = (transaction as any).deposits || [];
+                              if (deposits.length === 0) return <span style={{ color: '#94a3b8' }}>-</span>;
+                              const sortedDeposits = [...deposits].sort((a: any, b: any) => 
+                                new Date(a.deposit_date).getTime() - new Date(b.deposit_date).getTime()
+                              );
+                              const firstDeposit = sortedDeposits[0];
+                              return firstDeposit.mode_of_payment || <span style={{ color: '#94a3b8' }}>-</span>;
+                            })()}
                           </td>
                         )}
                         {!columnFilters.totalDeposits && (
