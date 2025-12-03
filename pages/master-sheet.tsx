@@ -93,28 +93,12 @@ export default function MasterSheet() {
   const fetchTransactions = async () => {
     try {
       setLoading(true);
-      // Calculate date range from selected month (works for ANY month/year - even 10+ years back)
       const [year, month] = selectedMonth.split('-');
       const selectedMonthDate = new Date(parseInt(year), parseInt(month) - 1, 1);
-      // Get last day of the selected month (handles different month lengths correctly)
       const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
       const selectedMonthEndDate = new Date(parseInt(year), parseInt(month) - 1, lastDay, 23, 59, 59, 999);
       
-      // OPTIMIZED: Fetch all stored returns in one query (much faster than calculating)
-      let url = '/api/master-transactions?';
-      if (selectedMember) {
-        url += `member_id=${selectedMember}&`;
-      }
-      // Fetch returns from a reasonable date range (last 5 years to selected month)
-      const fiveYearsAgo = new Date(selectedMonthDate);
-      fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
-      url += `start_date=${fiveYearsAgo.toISOString().split('T')[0]}&end_date=${selectedMonthEndDate.toISOString().split('T')[0]}&_t=${Date.now()}`;
-      
-      const storedRes = await fetch(url, { cache: 'no-store' });
-      const storedData = await storedRes.json();
-      let allReturns = storedData.filter((t: Transaction) => t.transaction_type === 'return');
-      
-      // Fetch members to calculate missing months
+      // Fetch members first (needed for both stored and calculated)
       const membersRes = await fetch('/api/members?_t=' + Date.now(), { cache: 'no-store' });
       const membersData = await membersRes.json();
       
@@ -122,128 +106,87 @@ export default function MasterSheet() {
         ? membersData.filter((m: any) => m.id === parseInt(selectedMember))
         : membersData;
       
-      // Fetch member details in parallel
-      const memberIds = membersToShow.map((m: any) => m.id);
-      const membersDetails = await Promise.all(
-        memberIds.map((id: number) => 
-          fetch(`/api/members/${id}?_t=${Date.now()}`, { cache: 'no-store' }).then(res => res.json())
-        )
-      );
-      
-      // Find earliest deposit date across all members
-      let earliestDate = new Date();
-      for (let i = 0; i < membersToShow.length; i++) {
-        const memberData = membersDetails[i];
-        if (memberData && memberData.deposits && memberData.deposits.length > 0) {
-          const depositDates = memberData.deposits.map((d: any) => new Date(d.deposit_date));
-          const earliestDepositDate = new Date(Math.min(...depositDates.map((d: Date) => d.getTime())));
-          if (earliestDepositDate < earliestDate) {
-            earliestDate = earliestDepositDate;
-          }
-        }
+      if (membersToShow.length === 0) {
+        setTransactions([]);
+        return;
       }
+
+      // Create member details map from basic data (no extra API calls needed)
+      const memberDetailsMap = new Map<number, any>();
+      membersToShow.forEach((m: any) => {
+        memberDetailsMap.set(m.id, m);
+      });
+
+      // OPTIMIZED: Only calculate for selected month, not all historical months
+      // This dramatically reduces API calls and loading time
+      const monthStartDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+      const monthEndDate = new Date(parseInt(year), parseInt(month) - 1, lastDay, 23, 59, 59, 999);
       
-      // Generate all months from first deposit to selected month
-      const firstDepositMonth = new Date(earliestDate.getFullYear(), earliestDate.getMonth(), 1);
-      const monthsToCalculate = getAllMonthsBetween(firstDepositMonth, selectedMonthDate);
-      
-      // Create a map of stored returns by member_id and month
-      const storedReturnsMap = new Map<string, Transaction>();
-      allReturns.forEach((ret: Transaction) => {
-        const retDate = new Date(ret.date);
-        const monthKey = `${retDate.getFullYear()}-${String(retDate.getMonth() + 1).padStart(2, '0')}`;
-        const mapKey = `${ret.member_id}-${monthKey}`;
-        storedReturnsMap.set(mapKey, ret);
+      // Calculate returns for selected month only (in parallel for all members)
+      const calculationPromises = membersToShow.map(async (member: any) => {
+        // Skip if no deposits
+        if (!member.deposits || member.deposits.length === 0) {
+          return null;
+        }
+        
+        // Check if member has any deposit on or before selected month
+        const hasDepositOnOrBefore = member.deposits.some((d: any) => {
+          const depositDate = new Date(d.deposit_date);
+          return depositDate <= monthEndDate;
+        });
+        
+        if (!hasDepositOnOrBefore) {
+          return null;
+        }
+        
+        try {
+          const calcRes = await fetch('/api/calculate-complex-interest', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              member_id: member.id,
+              start_date: monthStartDate.toISOString().split('T')[0],
+              end_date: monthEndDate.toISOString().split('T')[0]
+            })
+          });
+          const calcData = await calcRes.json();
+          
+          if (calcData.interest > 0) {
+            return {
+              id: `calculated-${member.id}-${selectedMonth}`,
+              type: 'return',
+              transaction_type: 'return',
+              member_id: member.id,
+              member_name: member.name,
+              alias_name: member.alias_name,
+              unique_number: member.unique_number,
+              village: member.village,
+              town: member.town,
+              percentage_of_return: member.percentage_of_return,
+              deposits: member.deposits || [],
+              amount: calcData.interest,
+              date: monthEndDate.toISOString().split('T')[0],
+              interest_days: lastDay,
+              notes: `Calculated for ${selectedMonth}`,
+              is_calculated: true,
+              month_key: selectedMonth
+            };
+          }
+        } catch (error) {
+          console.error(`Error calculating return for member ${member.id}:`, error);
+        }
+        return null;
       });
       
-      // Calculate missing returns for all months from first deposit to selected month
-      const calculationPromises: Promise<any>[] = [];
+      // Wait for all calculations
+      const results = await Promise.all(calculationPromises);
+      const validResults = results.filter((r: any) => r !== null);
       
-      for (let i = 0; i < membersToShow.length; i++) {
-        const member = membersToShow[i];
-        const memberData = membersDetails[i];
-        
-        if (!memberData || !memberData.deposits || memberData.deposits.length === 0) {
-          continue;
-        }
-        
-        // Get earliest deposit date for this member
-        const depositDates = memberData.deposits.map((d: any) => new Date(d.deposit_date));
-        const earliestDepositDate = new Date(Math.min(...depositDates.map((d: Date) => d.getTime())));
-        const firstDepositMonthForMember = new Date(earliestDepositDate.getFullYear(), earliestDepositDate.getMonth(), 1);
-        
-        // Calculate for all months from first deposit to selected month
-        const monthsForMember = getAllMonthsBetween(firstDepositMonthForMember, selectedMonthDate);
-        
-        for (const monthKey of monthsForMember) {
-          const [monthYear, monthNum] = monthKey.split('-');
-          const monthStartDate = new Date(parseInt(monthYear), parseInt(monthNum) - 1, 1);
-          const monthLastDay = new Date(parseInt(monthYear), parseInt(monthNum), 0).getDate();
-          const monthEndDate = new Date(parseInt(monthYear), parseInt(monthNum) - 1, monthLastDay, 23, 59, 59, 999);
-          
-          const mapKey = `${member.id}-${monthKey}`;
-          const storedReturn = storedReturnsMap.get(mapKey);
-          
-          // Only calculate if not already stored
-          if (!storedReturn) {
-            calculationPromises.push(
-              fetch('/api/calculate-complex-interest', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  member_id: member.id,
-                  start_date: monthStartDate.toISOString().split('T')[0],
-                  end_date: monthEndDate.toISOString().split('T')[0]
-                })
-              })
-              .then(res => res.json())
-              .then(calcData => {
-                if (calcData.interest > 0) {
-                  return {
-                    id: `calculated-${member.id}-${monthKey}`,
-                    type: 'return',
-                    transaction_type: 'return',
-                    member_id: member.id,
-                    member_name: memberData.name || member.name,
-                    alias_name: memberData.alias_name || member.alias_name,
-                    unique_number: memberData.unique_number || member.unique_number,
-                    village: memberData.village || member.village,
-                    town: memberData.town || member.town,
-                    percentage_of_return: memberData.percentage_of_return || member.percentage_of_return,
-                    deposits: memberData.deposits || [],
-                    amount: calcData.interest,
-                    date: monthEndDate.toISOString().split('T')[0],
-                    interest_days: monthLastDay,
-                    notes: `Calculated for ${monthKey}`,
-                    is_calculated: true,
-                    month_key: monthKey
-                  };
-                }
-                return null;
-              })
-              .catch(error => {
-                console.error(`Error calculating return for member ${member.id}, month ${monthKey}:`, error);
-                return null;
-              })
-            );
-          }
-        }
-      }
-      
-      // Wait for all calculations to complete
-      const calculatedResults = await Promise.all(calculationPromises);
-      const validCalculated = calculatedResults.filter((r: any) => r !== null);
-      allReturns = [...allReturns, ...validCalculated];
-      
-      // Sort by member name, then by date (oldest first for each member)
-      const sortedData = allReturns.sort((a: any, b: any) => {
+      // Sort by member name
+      const sortedData = validResults.sort((a: any, b: any) => {
         const nameA = (a.member_name || '').toLowerCase();
         const nameB = (b.member_name || '').toLowerCase();
-        if (nameA !== nameB) {
-          return nameA.localeCompare(nameB);
-        }
-        // Same member - sort by date
-        return new Date(a.date).getTime() - new Date(b.date).getTime();
+        return nameA.localeCompare(nameB);
       });
       
       setTransactions(sortedData);
@@ -316,83 +259,58 @@ export default function MasterSheet() {
       // Generate all months from first deposit to current month
       const monthsToCalculate = getAllMonthsBetween(firstDepositMonth, currentMonth);
       
-      // Fetch stored returns for this member
-      const storedRes = await fetch(`/api/master-transactions?member_id=${selectedMember}&start_date=${firstDepositMonth.toISOString().split('T')[0]}&end_date=${now.toISOString().split('T')[0]}&_t=${Date.now()}`, { cache: 'no-store' });
-      const storedData = await storedRes.json();
-      const storedReturns = storedData.filter((t: Transaction) => t.transaction_type === 'return');
-      
-      // Create a map of stored returns by month
-      const storedReturnsMap = new Map<string, Transaction>();
-      storedReturns.forEach((ret: Transaction) => {
-        const retDate = new Date(ret.date);
-        const monthKey = `${retDate.getFullYear()}-${String(retDate.getMonth() + 1).padStart(2, '0')}`;
-        storedReturnsMap.set(monthKey, ret);
-      });
-      
-      // Calculate missing returns for all months
-      const calculationPromises: Promise<any>[] = [];
-      
-      for (const monthKey of monthsToCalculate) {
+      // Calculate returns for ALL months (no stored returns - always calculate fresh)
+      const calculationPromises = monthsToCalculate.map(async (monthKey) => {
         const [monthYear, monthNum] = monthKey.split('-');
         const monthStartDate = new Date(parseInt(monthYear), parseInt(monthNum) - 1, 1);
         const monthLastDay = new Date(parseInt(monthYear), parseInt(monthNum), 0).getDate();
         const monthEndDate = new Date(parseInt(monthYear), parseInt(monthNum) - 1, monthLastDay, 23, 59, 59, 999);
         
-        const storedReturn = storedReturnsMap.get(monthKey);
-        
-        if (!storedReturn) {
-          calculationPromises.push(
-            fetch('/api/calculate-complex-interest', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                member_id: parseInt(selectedMember),
-                start_date: monthStartDate.toISOString().split('T')[0],
-                end_date: monthEndDate.toISOString().split('T')[0]
-              })
+        try {
+          const calcRes = await fetch('/api/calculate-complex-interest', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              member_id: parseInt(selectedMember),
+              start_date: monthStartDate.toISOString().split('T')[0],
+              end_date: monthEndDate.toISOString().split('T')[0]
             })
-            .then(res => res.json())
-            .then(calcData => {
-              if (calcData.interest > 0) {
-                return {
-                  id: `calculated-${selectedMember}-${monthKey}`,
-                  type: 'return',
-                  transaction_type: 'return',
-                  member_id: parseInt(selectedMember),
-                  member_name: memberData.name || '',
-                  alias_name: memberData.alias_name || '',
-                  unique_number: memberData.unique_number || 0,
-                  village: memberData.village || '',
-                  town: memberData.town || '',
-                  percentage_of_return: memberData.percentage_of_return || 0,
-                  deposits: memberData.deposits || [],
-                  amount: calcData.interest,
-                  date: monthEndDate.toISOString().split('T')[0],
-                  interest_days: monthLastDay,
-                  notes: `Calculated for ${monthKey}`,
-                  is_calculated: true,
-                  month_key: monthKey
-                };
-              }
-              return null;
-            })
-            .catch(error => {
-              console.error(`Error calculating return for month ${monthKey}:`, error);
-              return null;
-            })
-          );
+          });
+          const calcData = await calcRes.json();
+          
+          if (calcData.interest > 0) {
+            return {
+              id: `calculated-${selectedMember}-${monthKey}`,
+              type: 'return',
+              transaction_type: 'return',
+              member_id: parseInt(selectedMember),
+              member_name: memberData.name || '',
+              alias_name: memberData.alias_name || '',
+              unique_number: memberData.unique_number || 0,
+              village: memberData.village || '',
+              town: memberData.town || '',
+              percentage_of_return: memberData.percentage_of_return || 0,
+              deposits: memberData.deposits || [],
+              amount: calcData.interest,
+              date: monthEndDate.toISOString().split('T')[0],
+              interest_days: monthLastDay,
+              notes: `Calculated for ${monthKey}`,
+              is_calculated: true,
+              month_key: monthKey
+            };
+          }
+        } catch (error) {
+          console.error(`Error calculating return for month ${monthKey}:`, error);
         }
-      }
+        return null;
+      });
       
       // Wait for all calculations
-      const calculatedResults = await Promise.all(calculationPromises);
-      const validCalculated = calculatedResults.filter((r: any) => r !== null);
-      
-      // Combine stored and calculated returns
-      const allStatementReturns = [...storedReturns, ...validCalculated];
+      const results = await Promise.all(calculationPromises);
+      const validResults = results.filter((r: any) => r !== null);
       
       // Sort by date (oldest first)
-      const sortedStatement = allStatementReturns.sort((a: any, b: any) => {
+      const sortedStatement = validResults.sort((a: any, b: any) => {
         return new Date(a.date).getTime() - new Date(b.date).getTime();
       });
       
