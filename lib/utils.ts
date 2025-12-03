@@ -113,12 +113,22 @@ export function calculateComplexInterest(
   depositSegments.forEach(segment => {
     if (segment.amount <= 0) return;
 
-    // Get deposit date (segment.startDate is deposit date + 1)
-    const depositDate = new Date(segment.startDate);
-    depositDate.setDate(depositDate.getDate() - 1); // Go back to actual deposit date
+    // Get deposit date from interest start date (which is deposit date + 1)
+    // Create a new date to avoid mutating the original
+    const interestStart = new Date(segment.startDate.getTime());
+    const depositDay = interestStart.getDate() - 1; // Get original deposit day
+    const depositMonth = depositDay <= 0 
+      ? (interestStart.getMonth() === 0 ? 11 : interestStart.getMonth() - 1)
+      : interestStart.getMonth();
+    const depositYear = depositDay <= 0 && interestStart.getMonth() === 0
+      ? interestStart.getFullYear() - 1
+      : interestStart.getFullYear();
+    const actualDepositDay = depositDay <= 0 
+      ? new Date(depositYear, depositMonth + 1, 0).getDate() // Last day of previous month
+      : depositDay;
     
-    // Use year-month number for accurate comparison (avoids timezone issues)
-    const depositYearMonth = depositDate.getFullYear() * 12 + depositDate.getMonth();
+    // Use year-month number for accurate comparison
+    const depositYearMonth = depositYear * 12 + depositMonth;
     const periodYearMonth = periodStart.getFullYear() * 12 + periodStart.getMonth();
     
     // Skip if deposit is after this month
@@ -131,7 +141,7 @@ export function calculateComplexInterest(
     } else {
       // Deposit is IN this month - days = 30 - deposit_date
       // Example: Deposit on 19th → days = 30 - 19 = 11 days (20th to 30th)
-      days = 30 - depositDate.getDate();
+      days = 30 - actualDepositDay;
       if (days <= 0) days = 0; // Safety check
     }
     
