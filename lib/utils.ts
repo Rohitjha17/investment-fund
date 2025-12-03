@@ -119,11 +119,25 @@ export function calculateComplexInterest(
     
     if (effectiveStart >= effectiveEnd) return;
     
-    // Calculate days - add 1 to include both start and end dates (inclusive)
-    let days = Math.floor((effectiveEnd.getTime() - effectiveStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    // Check if this is a full month calculation (1st to last day of month)
+    const isFullMonth = periodStart.getDate() === 1 && 
+      effectiveStart.getDate() === 1 &&
+      effectiveStart.getMonth() === periodStart.getMonth() &&
+      effectiveStart.getFullYear() === periodStart.getFullYear();
     
-    // HARDCODED: Cap days at 30 as per client requirement (all months treated as 30 days)
-    days = Math.min(days, 30);
+    let days: number;
+    if (isFullMonth) {
+      // HARDCODED: Full month = 30 days as per client requirement
+      days = 30;
+    } else {
+      // For partial month (first month of deposit), calculate actual days
+      // Days from deposit date to end of month, normalized to 30-day month
+      const actualDays = Math.floor((effectiveEnd.getTime() - effectiveStart.getTime()) / (1000 * 60 * 60 * 24));
+      // Get actual days in this month
+      const daysInMonth = new Date(effectiveStart.getFullYear(), effectiveStart.getMonth() + 1, 0).getDate();
+      // Normalize to 30-day month: (actualDays / daysInMonth) * 30
+      days = Math.round((actualDays / daysInMonth) * 30);
+    }
     
     if (days > 0) {
       const interest = calculateInterestSimple(segment.amount, segment.rate, days);

@@ -256,12 +256,21 @@ export default function MasterSheet() {
       const earliestDepositDate = new Date(Math.min(...depositDates.map((d: Date) => d.getTime())));
       const firstDepositMonth = new Date(earliestDepositDate.getFullYear(), earliestDepositDate.getMonth(), 1);
       
-      // Get current month
+      // Get previous month (current month's payment happens next month, so we show up to previous month)
       const now = new Date();
-      const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      // If today is before 2nd, don't include previous month either (payment not yet made)
+      // If today is on or after 2nd, include up to previous month
+      let lastPaidMonth: Date;
+      if (now.getDate() >= 2) {
+        // Payment for previous month has been made (on 2nd of this month)
+        lastPaidMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      } else {
+        // Payment for previous month not yet made (we're before 2nd)
+        lastPaidMonth = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+      }
       
-      // Generate all months from first deposit to current month
-      const monthsToCalculate = getAllMonthsBetween(firstDepositMonth, currentMonth);
+      // Generate all months from first deposit to last paid month
+      const monthsToCalculate = getAllMonthsBetween(firstDepositMonth, lastPaidMonth);
       
       // Calculate returns for ALL months (no stored returns - always calculate fresh)
       // Only calculate for months where member had deposits BEFORE that month ends
@@ -350,7 +359,11 @@ export default function MasterSheet() {
       const deposits = (t as any).deposits || [];
       const transDate = new Date(t.date);
       const monthYear = transDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
-      const paymentDate = `2nd ${monthYear}`;
+      
+      // Payment is made on 2nd of NEXT month
+      const nextMonth = new Date(transDate.getFullYear(), transDate.getMonth() + 1, 2);
+      const paymentMonthYear = nextMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+      const paymentDate = `2nd ${paymentMonthYear}`;
       
       // Filter deposits made in this specific month
       const depositsThisMonth = deposits.filter((d: any) => {
@@ -375,7 +388,7 @@ export default function MasterSheet() {
         'Deposit This Month (₹)': depositAmountThisMonth > 0 ? depositAmountThisMonth : '-',
         'Return Rate (%)': (t as any).percentage_of_return || '',
         'Return Amount (₹)': Math.abs(t.amount),
-        'Interest Days': t.interest_days || ''
+        'Interest Days': 30 // Always 30 days as per client requirement
       };
     });
 
@@ -1297,7 +1310,11 @@ export default function MasterSheet() {
                       const deposits = (transaction as any).deposits || [];
                       const transDate = new Date(transaction.date);
                       const monthYear = transDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
-                      const paymentDate = `2nd ${monthYear}`;
+                      
+                      // Payment is made on 2nd of NEXT month (not same month)
+                      const nextMonth = new Date(transDate.getFullYear(), transDate.getMonth() + 1, 2);
+                      const paymentMonthYear = nextMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+                      const paymentDate = `2nd ${paymentMonthYear}`;
                       
                       // Filter deposits made in this specific month
                       const depositsThisMonth = deposits.filter((d: any) => {
