@@ -403,7 +403,7 @@ export default function MasterSheet() {
       'Deposit This Month (₹)': totalDeposits,
       'Return Rate (%)': '',
       'Return Amount (₹)': totalReturns,
-      'Interest Days': '-'
+      'Interest Days': 0
     });
 
     // Create workbook and worksheet
