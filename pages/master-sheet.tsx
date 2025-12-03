@@ -348,22 +348,31 @@ export default function MasterSheet() {
     // Prepare data for Excel
     const excelData = statementData.map((t, index) => {
       const deposits = (t as any).deposits || [];
-      const totalDeposits = deposits.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0);
-      
       const transDate = new Date(t.date);
       const monthYear = transDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
       const paymentDate = `2nd ${monthYear}`;
+      
+      // Filter deposits made in this specific month
+      const depositsThisMonth = deposits.filter((d: any) => {
+        const depositDate = new Date(d.deposit_date);
+        return depositDate.getMonth() === transDate.getMonth() && 
+               depositDate.getFullYear() === transDate.getFullYear();
+      });
+      
+      // Calculate deposits for this month only
+      const depositAmountThisMonth = depositsThisMonth.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0);
+      
+      // Get investment dates for this month
+      const investmentDates = depositsThisMonth.map((d: any) => 
+        new Date(d.deposit_date).toLocaleDateString('en-IN')
+      ).join(', ');
       
       return {
         'S.No': index + 1,
         'Month': monthYear,
         'Payment Date': paymentDate,
-        'Unique #': t.unique_number || '',
-        'Member Name': t.member_name,
-        'Alias Name': t.alias_name || '',
-        'Village': (t as any).village || '',
-        'Town': (t as any).town || '',
-        'Total Deposits (₹)': totalDeposits,
+        'Investment Date': investmentDates || '-',
+        'Deposit This Month (₹)': depositAmountThisMonth > 0 ? depositAmountThisMonth : '-',
         'Return Rate (%)': (t as any).percentage_of_return || '',
         'Return Amount (₹)': Math.abs(t.amount),
         'Interest Days': t.interest_days || ''
@@ -372,16 +381,13 @@ export default function MasterSheet() {
 
     // Add summary row
     const totalReturns = statementData.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    const totalDeposits = (selectedMemberDetails.deposits || []).reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0);
     excelData.push({
       'S.No': statementData.length + 1,
       'Month': 'TOTAL',
       'Payment Date': '',
-      'Unique #': '',
-      'Member Name': '',
-      'Alias Name': '',
-      'Village': '',
-      'Town': '',
-      'Total Deposits (₹)': '',
+      'Investment Date': '',
+      'Deposit This Month (₹)': totalDeposits,
       'Return Rate (%)': '',
       'Return Amount (₹)': totalReturns,
       'Interest Days': ''
@@ -397,12 +403,8 @@ export default function MasterSheet() {
       { wch: 6 },  // S.No
       { wch: 20 }, // Month
       { wch: 20 }, // Payment Date
-      { wch: 10 }, // Unique #
-      { wch: 25 }, // Member Name
-      { wch: 15 }, // Alias Name
-      { wch: 20 }, // Village
-      { wch: 20 }, // Town
-      { wch: 18 }, // Total Deposits
+      { wch: 20 }, // Investment Date
+      { wch: 20 }, // Deposit This Month
       { wch: 12 }, // Return Rate
       { wch: 18 }, // Return Amount
       { wch: 12 }  // Interest Days
@@ -1232,6 +1234,11 @@ export default function MasterSheet() {
                     </p>
                   )}
                   <p style={{ margin: '4px 0' }}>
+                    <strong>Total Deposits:</strong> {formatCurrency(
+                      (selectedMemberDetails.deposits || []).reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0)
+                    )}
+                  </p>
+                  <p style={{ margin: '4px 0' }}>
                     <strong>Total Returns:</strong> {formatCurrency(statementData.reduce((sum, t) => sum + Math.abs(t.amount), 0))}
                   </p>
                   <p style={{ margin: '4px 0' }}>
@@ -1278,7 +1285,8 @@ export default function MasterSheet() {
                       <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>S.No</th>
                       <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Month</th>
                       <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Payment Date</th>
-                      <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Total Deposits</th>
+                      <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Investment Date</th>
+                      <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Deposit This Month</th>
                       <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Return Rate</th>
                       <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Return Amount</th>
                       <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Interest Days</th>
@@ -1287,10 +1295,24 @@ export default function MasterSheet() {
                   <tbody>
                     {statementData.map((transaction, index) => {
                       const deposits = (transaction as any).deposits || [];
-                      const totalDeposits = deposits.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0);
                       const transDate = new Date(transaction.date);
                       const monthYear = transDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
                       const paymentDate = `2nd ${monthYear}`;
+                      
+                      // Filter deposits made in this specific month
+                      const depositsThisMonth = deposits.filter((d: any) => {
+                        const depositDate = new Date(d.deposit_date);
+                        return depositDate.getMonth() === transDate.getMonth() && 
+                               depositDate.getFullYear() === transDate.getFullYear();
+                      });
+                      
+                      // Calculate deposits for this month only
+                      const depositAmountThisMonth = depositsThisMonth.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0);
+                      
+                      // Get investment dates for this month
+                      const investmentDates = depositsThisMonth.map((d: any) => 
+                        new Date(d.deposit_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                      ).join(', ');
 
                       return (
                         <tr 
@@ -1303,8 +1325,11 @@ export default function MasterSheet() {
                           <td style={{ padding: '12px', fontWeight: 600 }}>{index + 1}</td>
                           <td style={{ padding: '12px', color: '#475569' }}>{monthYear}</td>
                           <td style={{ padding: '12px', color: '#475569' }}>{paymentDate}</td>
-                          <td style={{ padding: '12px', fontWeight: 700, color: '#10b981' }}>
-                            {formatCurrency(totalDeposits)}
+                          <td style={{ padding: '12px', color: '#475569' }}>
+                            {investmentDates || <span style={{ color: '#94a3b8' }}>-</span>}
+                          </td>
+                          <td style={{ padding: '12px', fontWeight: 700, color: depositAmountThisMonth > 0 ? '#10b981' : '#94a3b8' }}>
+                            {depositAmountThisMonth > 0 ? formatCurrency(depositAmountThisMonth) : '-'}
                           </td>
                           <td style={{ padding: '12px' }}>
                             {(transaction as any).percentage_of_return ? (
@@ -1338,7 +1363,7 @@ export default function MasterSheet() {
                       fontWeight: 800,
                       borderTop: '3px solid #6366f1'
                     }}>
-                      <td colSpan={5} style={{ padding: '12px', textAlign: 'right', fontSize: '16px' }}>
+                      <td colSpan={6} style={{ padding: '12px', textAlign: 'right', fontSize: '16px' }}>
                         TOTAL:
                       </td>
                       <td style={{ padding: '12px', color: '#3b82f6', fontSize: '18px' }}>
