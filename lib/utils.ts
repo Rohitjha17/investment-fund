@@ -113,30 +113,34 @@ export function calculateComplexInterest(
   depositSegments.forEach(segment => {
     if (segment.amount <= 0) return;
 
-    // Calculate interest start and end dates for this deposit
-    const effectiveStart = new Date(Math.max(segment.startDate.getTime(), periodStart.getTime()));
-    const effectiveEnd = new Date(periodEnd);
+    // Get deposit date (segment.startDate is deposit date + 1)
+    const depositDate = new Date(segment.startDate);
+    depositDate.setDate(depositDate.getDate() - 1); // Go back to actual deposit date
     
-    if (effectiveStart >= effectiveEnd) return;
+    // Check if this deposit was made in the calculation month
+    const isDepositInThisMonth = 
+      depositDate.getMonth() === periodStart.getMonth() && 
+      depositDate.getFullYear() === periodStart.getFullYear();
     
-    // Check if this is a full month calculation (1st to last day of month)
-    const isFullMonth = periodStart.getDate() === 1 && 
-      effectiveStart.getDate() === 1 &&
-      effectiveStart.getMonth() === periodStart.getMonth() &&
-      effectiveStart.getFullYear() === periodStart.getFullYear();
+    // Check if deposit was made AFTER this month (shouldn't calculate)
+    const isDepositAfterThisMonth = depositDate > periodEnd;
+    if (isDepositAfterThisMonth) return;
+    
+    // Check if deposit was made BEFORE this month (full 30 days)
+    const isDepositBeforeThisMonth = 
+      depositDate.getMonth() < periodStart.getMonth() || 
+      depositDate.getFullYear() < periodStart.getFullYear();
     
     let days: number;
-    if (isFullMonth) {
-      // HARDCODED: Full month = 30 days as per client requirement
+    if (isDepositBeforeThisMonth) {
+      // Deposit was before this month - FULL 30 days
       days = 30;
+    } else if (isDepositInThisMonth) {
+      // Deposit in this month - days = 30 - deposit_date (from next day to 30th)
+      // Example: Deposit on 12th → days = 30 - 12 = 18 days (13th to 30th)
+      days = 30 - depositDate.getDate();
     } else {
-      // For partial month (first month of deposit), calculate actual days
-      // Days from deposit date to end of month, normalized to 30-day month
-      const actualDays = Math.floor((effectiveEnd.getTime() - effectiveStart.getTime()) / (1000 * 60 * 60 * 24));
-      // Get actual days in this month
-      const daysInMonth = new Date(effectiveStart.getFullYear(), effectiveStart.getMonth() + 1, 0).getDate();
-      // Normalize to 30-day month: (actualDays / daysInMonth) * 30
-      days = Math.round((actualDays / daysInMonth) * 30);
+      days = 0;
     }
     
     if (days > 0) {
