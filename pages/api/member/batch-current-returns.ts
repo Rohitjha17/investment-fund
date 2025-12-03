@@ -63,7 +63,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // calculateComplexInterest internally handles (deposit date + 1) for each deposit
         // So old deposits will calculate from 1st, new deposits from their date + 1
 
-        returnAmount = calculateComplexInterest(
+        const result = calculateComplexInterest(
           deposits.map((d: any) => ({
             amount: d.amount,
             date: d.deposit_date,
@@ -77,6 +77,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           currentWindow.start, // Always use 1st of month
           currentWindow.end
         );
+        returnAmount = result.interest;
       } else {
         // No deposits in current month
         if (isPastSecond) {
@@ -91,7 +92,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             returnAmount = currentMonthReturns.reduce((sum: number, r: any) => sum + r.return_amount, 0);
           } else {
             // Calculate for current month
-            returnAmount = calculateComplexInterest(
+            const result = calculateComplexInterest(
               deposits.map((d: any) => ({
                 amount: d.amount,
                 date: d.deposit_date,
@@ -105,10 +106,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               currentWindow.start,
               currentWindow.end
             );
+            returnAmount = result.interest;
           }
         } else {
           // Before 2nd - calculate projected return
-          returnAmount = calculateComplexInterest(
+          const result = calculateComplexInterest(
             deposits.map((d: any) => ({
               amount: d.amount,
               date: d.deposit_date,
@@ -122,6 +124,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             currentWindow.start,
             currentWindow.end
           );
+          returnAmount = result.interest;
         }
       }
 

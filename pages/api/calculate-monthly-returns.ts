@@ -54,7 +54,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Calculate interest for previous month (full month window)
       const defaultPercentage = (member as any).percentage_of_return || 0;
       
-      const interest = calculateComplexInterest(
+      const result = calculateComplexInterest(
         deposits.map((d: any) => ({
           amount: d.amount,
           date: d.deposit_date,
@@ -70,6 +70,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         start,
         end
       );
+      const interest = result.interest;
 
       // Only create return if interest > 0
       if (interest > 0) {

@@ -70,7 +70,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       interestDays = 30; // Hardcoded 30 days as per client requirement
 
       // Calculate interest for current month (use 1st of month as start)
-      returnAmount = calculateComplexInterest(
+      const result = calculateComplexInterest(
         deposits.map((d: any) => ({
           amount: d.amount,
           date: d.deposit_date,
@@ -86,6 +86,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         currentWindow.start, // Always use 1st of month - the function handles deposit date + 1 internally
         monthEndDate
       );
+      returnAmount = result.interest;
 
       periodType = 'current_month_with_new_deposits';
       periodInfo = `1st to 30th of ${today.toLocaleString('en-IN', { month: 'long', year: 'numeric' })} (includes new deposits)`;
@@ -107,7 +108,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           periodInfo = `Stored return for ${today.toLocaleString('en-IN', { month: 'long', year: 'numeric' })}`;
         } else {
           // Calculate for current month (full month)
-          returnAmount = calculateComplexInterest(
+          const result = calculateComplexInterest(
             deposits.map((d: any) => ({
               amount: d.amount,
               date: d.deposit_date,
@@ -123,13 +124,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             currentWindow.start,
             currentWindow.end
           );
+          returnAmount = result.interest;
           interestDays = 30; // Hardcoded 30 days as per client requirement
           periodType = 'current_month_full';
           periodInfo = `1st to 30th of ${today.toLocaleString('en-IN', { month: 'long', year: 'numeric' })}`;
         }
       } else {
         // Before 2nd - calculate what will be the return
-        returnAmount = calculateComplexInterest(
+        const result = calculateComplexInterest(
           deposits.map((d: any) => ({
             amount: d.amount,
             date: d.deposit_date,
@@ -145,6 +147,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           currentWindow.start,
           currentWindow.end
         );
+        returnAmount = result.interest;
         interestDays = 30; // Hardcoded 30 days as per client requirement
         periodType = 'current_month_projected';
         periodInfo = `1st to 30th of ${today.toLocaleString('en-IN', { month: 'long', year: 'numeric' })} (Projected)`;
@@ -185,7 +188,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       
       // Calculate interest for this specific deposit (without withdrawals, as they're already applied)
       // calculateComplexInterest handles (deposit date + 1) internally
-      const depositInterest = calculateComplexInterest(
+      const depositResult = calculateComplexInterest(
         [{
           amount: d.adjusted_amount,
           date: d.deposit_date,
@@ -202,7 +205,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         amount: d.original_amount,
         adjusted_amount: d.adjusted_amount,
         percentage: depositRate,
-        interest: Math.round(depositInterest * 100) / 100
+        interest: Math.round(depositResult.interest * 100) / 100
       };
     });
 

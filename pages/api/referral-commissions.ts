@@ -101,16 +101,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return depositDate <= endDate;
       });
       
-      const withdrawals = (fullMember.withdrawals || []).filter((w: any) => {
+      // Get all withdrawals before or during this month
+      const withdrawalsBefore = (fullMember.withdrawals || []).filter((w: any) => {
         const withdrawalDate = new Date(w.withdrawal_date);
-        return withdrawalDate <= endDate;
+        const withdrawalYearMonth = withdrawalDate.getFullYear() * 12 + withdrawalDate.getMonth();
+        const periodYearMonth = startDate.getFullYear() * 12 + startDate.getMonth();
+        return withdrawalYearMonth < periodYearMonth; // Withdrawals BEFORE this month
+      });
+      
+      const withdrawalsThisMonth = (fullMember.withdrawals || []).filter((w: any) => {
+        const withdrawalDate = new Date(w.withdrawal_date);
+        return withdrawalDate.getMonth() === startDate.getMonth() && 
+               withdrawalDate.getFullYear() === startDate.getFullYear();
       });
 
       const totalDeposits = deposits.reduce((sum: number, d: any) => sum + d.amount, 0);
-      const totalWithdrawals = withdrawals.reduce((sum: number, w: any) => sum + w.amount, 0);
-      const principalAmount = totalDeposits - totalWithdrawals;
+      const totalWithdrawalsBefore = withdrawalsBefore.reduce((sum: number, w: any) => sum + w.amount, 0);
+      const totalWithdrawalsThisMonth = withdrawalsThisMonth.reduce((sum: number, w: any) => sum + w.amount, 0);
+      
+      // Principal BEFORE any withdrawals this month
+      const principalBeforeThisMonth = totalDeposits - totalWithdrawalsBefore;
+      // Principal AFTER all withdrawals
+      const principalAfterAllWithdrawals = principalBeforeThisMonth - totalWithdrawalsThisMonth;
 
-      if (principalAmount <= 0) continue;
+      if (principalBeforeThisMonth <= 0) continue;
 
       // Find earliest deposit date for this member
       const depositDates = deposits.map((d: any) => new Date(d.deposit_date));
@@ -118,23 +132,59 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ? new Date(Math.min(...depositDates.map((d: Date) => d.getTime())))
         : null;
 
-      // Calculate commission based on principal amount
-      // For first month: If investment is made mid-month, commission should be prorated
-      let commissionAmount = (principalAmount * referralPercent) / 100;
+      // Calculate commission considering withdrawal date within month
+      // If withdrawal happens on 10th:
+      // - Days 1-9: Commission on full principal
+      // - Days 10-30: Commission on reduced principal
+      let commissionAmount = 0;
       
-      // If this is the first month (investment month), prorate commission based on investment date
-      if (earliestDepositDate && 
+      // Check if this is the first month (investment month)
+      const isFirstMonth = earliestDepositDate && 
           earliestDepositDate.getMonth() === startDate.getMonth() && 
-          earliestDepositDate.getFullYear() === startDate.getFullYear()) {
-        // Investment was made in this month - calculate days from investment date+1 to end of month
-        const investmentDate = new Date(earliestDepositDate);
-        investmentDate.setHours(0, 0, 0, 0);
-        // HARDCODED: Always use 30 days per month as per client requirement
-        const daysInMonth = 30;
-        // Interest starts from next day after deposit, so calculate from deposit date + 1
-        const daysFromInvestment = Math.min(30 - investmentDate.getDate(), 30); // Days from (deposit date + 1) to 30th
-        const proratedFactor = daysFromInvestment / daysInMonth;
-        commissionAmount = commissionAmount * proratedFactor;
+          earliestDepositDate.getFullYear() === startDate.getFullYear();
+      
+      if (withdrawalsThisMonth.length > 0) {
+        // There are withdrawals this month - need to calculate commission in parts
+        // Sort withdrawals by date
+        const sortedWithdrawals = [...withdrawalsThisMonth].sort((a: any, b: any) => 
+          new Date(a.withdrawal_date).getTime() - new Date(b.withdrawal_date).getTime()
+        );
+        
+        let currentPrincipal = principalBeforeThisMonth;
+        let currentDay = isFirstMonth ? (earliestDepositDate!.getDate() + 1) : 1; // Start from deposit day + 1 for first month
+        
+        for (const w of sortedWithdrawals) {
+          const withdrawalDate = new Date(w.withdrawal_date);
+          const withdrawalDay = withdrawalDate.getDate();
+          
+          if (withdrawalDay > currentDay && currentPrincipal > 0) {
+            // Calculate commission from currentDay to withdrawalDay - 1
+            const daysBeforeWithdrawal = withdrawalDay - currentDay;
+            const partialCommission = (currentPrincipal * referralPercent * daysBeforeWithdrawal) / (100 * 30);
+            commissionAmount += partialCommission;
+            currentDay = withdrawalDay;
+          }
+          
+          // Apply withdrawal
+          currentPrincipal -= w.amount;
+          if (currentPrincipal < 0) currentPrincipal = 0;
+        }
+        
+        // Calculate commission from last withdrawal to end of month (day 30)
+        if (currentPrincipal > 0 && currentDay <= 30) {
+          const remainingDays = 30 - currentDay + 1;
+          const partialCommission = (currentPrincipal * referralPercent * remainingDays) / (100 * 30);
+          commissionAmount += partialCommission;
+        }
+      } else {
+        // No withdrawals this month - simple calculation
+        commissionAmount = (principalBeforeThisMonth * referralPercent) / 100;
+        
+        // If first month, prorate based on investment date
+        if (isFirstMonth) {
+          const daysFromInvestment = Math.min(30 - earliestDepositDate!.getDate(), 30);
+          commissionAmount = commissionAmount * (daysFromInvestment / 30);
+        }
       }
 
       // Find the root referrer for hierarchical referrals
@@ -156,7 +206,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       referralCommissions[normalizedRootReferrer].breakdown.push({
         member_id: memberIds[i],
         member_name: (fullMember as any).name,
-        principal_amount: principalAmount,
+        principal_amount: principalAfterAllWithdrawals, // Current balance after all withdrawals
         referral_percent: referralPercent,
         commission_amount: commissionAmount,
         is_direct: isDirect,

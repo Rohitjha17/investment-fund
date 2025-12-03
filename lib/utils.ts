@@ -51,107 +51,194 @@ export function isSecondOfMonth(): boolean {
 
 // Complex interest calculation with multiple deposits/withdrawals and different rates
 // Each deposit maintains its own percentage rate
-// ALWAYS clamps to provided window (full month cycle)
+// Withdrawals are handled within the same month (partial month calculation)
+// ALWAYS clamps to provided window (full month cycle = 30 days)
+//
+// LOGIC:
+// Example: 15 lakh invested, 5 lakh withdrawn on 10th
+// - Days 1-9 (9 days): Interest on 15 lakh
+// - Days 10-30 (21 days): Interest on 10 lakh
 export function calculateComplexInterest(
   deposits: Array<{ amount: number; date: string; percentage?: number }>,
   withdrawals: Array<{ amount: number; date: string }>,
   defaultPercentage: number,
   startDate: Date,
   endDate: Date
-): number {
-  if (deposits.length === 0) return 0;
-  if (!startDate || !endDate) return 0;
+): { interest: number; withdrawalDetails: Array<{ date: string; amount: number; dayOfWithdrawal: number }> } {
+  if (deposits.length === 0) return { interest: 0, withdrawalDetails: [] };
+  if (!startDate || !endDate) return { interest: 0, withdrawalDetails: [] };
 
   const periodStart = new Date(startDate);
-  const periodEnd = new Date(endDate);
+  const periodYearMonth = periodStart.getFullYear() * 12 + periodStart.getMonth();
 
-  // Track each deposit separately with its own rate
-  const depositSegments: Array<{
+  // Parse all deposits with their details
+  const parsedDeposits: Array<{
     amount: number;
     rate: number;
-    startDate: Date; // Interest start date (deposit date + 1)
+    depositDate: Date;
+    depositDay: number;
+    depositYearMonth: number;
   }> = [];
 
-  // Process deposits
   deposits.forEach(d => {
-    const dateParts = d.date.split('-');
+    const dateStr = String(d.date).split('T')[0];
+    const dateParts = dateStr.split('-');
     const depositDate = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]));
     if (isNaN(depositDate.getTime())) return;
     
-    // Interest starts from next day after deposit
-    const interestStartDate = new Date(depositDate);
-    interestStartDate.setDate(interestStartDate.getDate() + 1);
-    
-    depositSegments.push({
+    parsedDeposits.push({
       amount: d.amount,
       rate: d.percentage !== null && d.percentage !== undefined ? d.percentage : defaultPercentage,
-      startDate: interestStartDate
+      depositDate,
+      depositDay: depositDate.getDate(),
+      depositYearMonth: depositDate.getFullYear() * 12 + depositDate.getMonth()
     });
   });
 
-  // Process withdrawals - reduce deposits proportionally (FIFO)
+  // Sort deposits by date (oldest first) for FIFO
+  parsedDeposits.sort((a, b) => a.depositDate.getTime() - b.depositDate.getTime());
+
+  // Parse all withdrawals
+  const parsedWithdrawals: Array<{
+    amount: number;
+    withdrawalDate: Date;
+    withdrawalDay: number;
+    withdrawalYearMonth: number;
+  }> = [];
+  
+  const withdrawalDetails: Array<{ date: string; amount: number; dayOfWithdrawal: number }> = [];
+
   withdrawals.forEach(w => {
-    const dateParts = w.date.split('-');
+    const dateStr = String(w.date).split('T')[0];
+    const dateParts = dateStr.split('-');
     const withdrawalDate = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]));
     if (isNaN(withdrawalDate.getTime())) return;
     
-    let remainingWithdrawal = w.amount;
+    const withdrawalYearMonth = withdrawalDate.getFullYear() * 12 + withdrawalDate.getMonth();
     
-    // Reduce from oldest deposits first (FIFO)
-    for (let i = 0; i < depositSegments.length && remainingWithdrawal > 0; i++) {
-      if (depositSegments[i].amount > 0) {
-        const reduction = Math.min(depositSegments[i].amount, remainingWithdrawal);
-        depositSegments[i].amount -= reduction;
+    parsedWithdrawals.push({
+      amount: w.amount,
+      withdrawalDate,
+      withdrawalDay: withdrawalDate.getDate(),
+      withdrawalYearMonth
+    });
+    
+    // Track withdrawal details for this month
+    if (withdrawalYearMonth === periodYearMonth) {
+      withdrawalDetails.push({
+        date: dateStr,
+        amount: w.amount,
+        dayOfWithdrawal: withdrawalDate.getDate()
+      });
+    }
+  });
+
+  // Sort withdrawals by date (oldest first)
+  parsedWithdrawals.sort((a, b) => a.withdrawalDate.getTime() - b.withdrawalDate.getTime());
+
+  // Step 1: Apply all withdrawals BEFORE this month using FIFO
+  // This reduces the deposit amounts permanently
+  const depositAmounts = parsedDeposits.map(d => ({
+    ...d,
+    currentAmount: d.amount
+  }));
+
+  for (const w of parsedWithdrawals) {
+    if (w.withdrawalYearMonth >= periodYearMonth) break; // Stop at this month's withdrawals
+    
+    let remainingWithdrawal = w.amount;
+    for (let i = 0; i < depositAmounts.length && remainingWithdrawal > 0; i++) {
+      if (depositAmounts[i].currentAmount > 0) {
+        const reduction = Math.min(depositAmounts[i].currentAmount, remainingWithdrawal);
+        depositAmounts[i].currentAmount -= reduction;
         remainingWithdrawal -= reduction;
       }
     }
-  });
+  }
 
-  // Calculate interest for each deposit separately
+  // Step 2: Get withdrawals IN this month
+  const withdrawalsThisMonth = parsedWithdrawals.filter(w => w.withdrawalYearMonth === periodYearMonth);
+  withdrawalsThisMonth.sort((a, b) => a.withdrawalDay - b.withdrawalDay);
+
+  // Step 3: Calculate total principal at start of this month (after past withdrawals)
+  let totalPrincipalStart = depositAmounts.reduce((sum, d) => {
+    // Only count deposits made before or in this month
+    if (d.depositYearMonth <= periodYearMonth) {
+      return sum + d.currentAmount;
+    }
+    return sum;
+  }, 0);
+
+  if (totalPrincipalStart <= 0) return { interest: 0, withdrawalDetails };
+
+  // Step 4: Calculate interest considering withdrawals within the month
+  // Use weighted average rate based on deposit amounts
+  const totalOriginalDeposits = depositAmounts.reduce((sum, d) => {
+    if (d.depositYearMonth <= periodYearMonth && d.currentAmount > 0) {
+      return sum + d.currentAmount;
+    }
+    return sum;
+  }, 0);
+
+  const weightedRate = depositAmounts.reduce((sum, d) => {
+    if (d.depositYearMonth <= periodYearMonth && d.currentAmount > 0) {
+      return sum + (d.rate * d.currentAmount / totalOriginalDeposits);
+    }
+    return sum;
+  }, 0);
+
+  // Step 5: Find earliest deposit day in THIS month (for new deposits this month)
+  let interestStartDay = 1; // Default: full month
+  const depositsThisMonth = depositAmounts.filter(d => d.depositYearMonth === periodYearMonth);
+  
+  // If ALL deposits are from THIS month, start from earliest deposit day + 1
+  const depositsBeforeThisMonth = depositAmounts.filter(d => d.depositYearMonth < periodYearMonth && d.currentAmount > 0);
+  
+  if (depositsBeforeThisMonth.length === 0 && depositsThisMonth.length > 0) {
+    // All deposits are from this month - find earliest
+    const earliestDepositDay = Math.min(...depositsThisMonth.map(d => d.depositDay));
+    interestStartDay = earliestDepositDay + 1;
+  }
+
+  // Step 6: Calculate interest in time segments
   let totalInterest = 0;
+  let currentPrincipal = totalPrincipalStart;
+  let currentDay = interestStartDay;
 
-  depositSegments.forEach(segment => {
-    if (segment.amount <= 0) return;
-
-    // Get deposit date from interest start date (which is deposit date + 1)
-    // Create a new date to avoid mutating the original
-    const interestStart = new Date(segment.startDate.getTime());
-    const depositDay = interestStart.getDate() - 1; // Get original deposit day
-    const depositMonth = depositDay <= 0 
-      ? (interestStart.getMonth() === 0 ? 11 : interestStart.getMonth() - 1)
-      : interestStart.getMonth();
-    const depositYear = depositDay <= 0 && interestStart.getMonth() === 0
-      ? interestStart.getFullYear() - 1
-      : interestStart.getFullYear();
-    const actualDepositDay = depositDay <= 0 
-      ? new Date(depositYear, depositMonth + 1, 0).getDate() // Last day of previous month
-      : depositDay;
-    
-    // Use year-month number for accurate comparison
-    const depositYearMonth = depositYear * 12 + depositMonth;
-    const periodYearMonth = periodStart.getFullYear() * 12 + periodStart.getMonth();
-    
-    // Skip if deposit is after this month
-    if (depositYearMonth > periodYearMonth) return;
-    
-    let days: number;
-    if (depositYearMonth < periodYearMonth) {
-      // Deposit was BEFORE this month - FULL 30 days
-      days = 30;
-    } else {
-      // Deposit is IN this month - days = 30 - deposit_date
-      // Example: Deposit on 19th → days = 30 - 19 = 11 days (20th to 30th)
-      days = 30 - actualDepositDay;
-      if (days <= 0) days = 0; // Safety check
+  if (withdrawalsThisMonth.length === 0) {
+    // No withdrawals this month - simple calculation
+    const days = 30 - currentDay + 1;
+    if (days > 0 && currentPrincipal > 0) {
+      totalInterest = calculateInterestSimple(currentPrincipal, weightedRate, days);
+    }
+  } else {
+    // Process withdrawals and calculate interest in segments
+    for (const w of withdrawalsThisMonth) {
+      const withdrawalDay = w.withdrawalDay;
+      
+      // Calculate interest from currentDay to withdrawalDay - 1
+      if (withdrawalDay > currentDay && currentPrincipal > 0) {
+        const daysBeforeWithdrawal = withdrawalDay - currentDay;
+        totalInterest += calculateInterestSimple(currentPrincipal, weightedRate, daysBeforeWithdrawal);
+        currentDay = withdrawalDay;
+      }
+      
+      // Apply withdrawal
+      currentPrincipal -= w.amount;
+      if (currentPrincipal < 0) currentPrincipal = 0;
     }
     
-    if (days > 0) {
-      const interest = calculateInterestSimple(segment.amount, segment.rate, days);
-      totalInterest += interest;
+    // Calculate interest from last withdrawal to day 30
+    if (currentPrincipal > 0 && currentDay <= 30) {
+      const remainingDays = 30 - currentDay + 1;
+      totalInterest += calculateInterestSimple(currentPrincipal, weightedRate, remainingDays);
     }
-  });
+  }
 
-  return Math.round(totalInterest * 100) / 100;
+  return { 
+    interest: Math.round(totalInterest * 100) / 100,
+    withdrawalDetails
+  };
 }
 
 // Format date for display

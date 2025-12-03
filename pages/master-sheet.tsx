@@ -317,6 +317,8 @@ export default function MasterSheet() {
               town: memberData.town || '',
               percentage_of_return: memberData.percentage_of_return || 0,
               deposits: memberData.deposits || [],
+              withdrawals: memberData.withdrawals || [],
+              withdrawals_this_month: calcData.withdrawals_this_month || [],
               amount: calcData.interest,
               date: monthEnd,
               interest_days: 30
@@ -356,6 +358,7 @@ export default function MasterSheet() {
     
     const excelData = statementData.map((t, index) => {
       const deposits = (t as any).deposits || [];
+      const withdrawals = (t as any).withdrawals || [];
       const transYear = (t as any).year || new Date(t.date).getFullYear();
       const transMonth = (t as any).month !== undefined ? (t as any).month : new Date(t.date).getMonth();
       const monthYear = `${monthNames[transMonth]} ${transYear}`;
@@ -379,8 +382,19 @@ export default function MasterSheet() {
         return depMonth === transMonth && depYear === transYear;
       });
       
-      // Calculate deposits for this month only
+      // Filter withdrawals made in this specific month
+      const withdrawalsThisMonth = withdrawals.filter((w: any) => {
+        if (!w.withdrawal_date) return false;
+        const dateStr = String(w.withdrawal_date).split('T')[0];
+        const parts = dateStr.split('-');
+        const wYear = parseInt(parts[0]);
+        const wMonth = parseInt(parts[1]) - 1;
+        return wMonth === transMonth && wYear === transYear;
+      });
+      
+      // Calculate deposits and withdrawals for this month only
       const depositAmountThisMonth = depositsThisMonth.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0);
+      const withdrawalAmountThisMonth = withdrawalsThisMonth.reduce((sum: number, w: any) => sum + (parseFloat(w.amount) || 0), 0);
       
       // Get investment dates for this month
       const investmentDates = depositsThisMonth.map((d: any) => {
@@ -389,7 +403,14 @@ export default function MasterSheet() {
         return `${parts[2]}-${monthNames[parseInt(parts[1]) - 1].substring(0, 3)}-${parts[0]}`;
       }).join(', ');
       
-      // Calculate total investment till this month
+      // Get withdrawal info for this month
+      const withdrawalInfo = withdrawalsThisMonth.map((w: any) => {
+        const dateStr = String(w.withdrawal_date).split('T')[0];
+        const parts = dateStr.split('-');
+        return `${parts[2]}-${monthNames[parseInt(parts[1]) - 1].substring(0, 3)}: ₹${w.amount}`;
+      }).join(', ');
+      
+      // Calculate total investment till this month (deposits - withdrawals)
       const transYearMonth = transYear * 12 + transMonth;
       const depositsTillThisMonth = deposits.filter((d: any) => {
         if (!d.deposit_date) return false;
@@ -399,7 +420,17 @@ export default function MasterSheet() {
         const depMonth = parseInt(parts[1]) - 1;
         return (depYear * 12 + depMonth) <= transYearMonth;
       });
-      const totalInvestmentTillDate = depositsTillThisMonth.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0);
+      const withdrawalsTillThisMonth = withdrawals.filter((w: any) => {
+        if (!w.withdrawal_date) return false;
+        const dateStr = String(w.withdrawal_date).split('T')[0];
+        const parts = dateStr.split('-');
+        const wYear = parseInt(parts[0]);
+        const wMonth = parseInt(parts[1]) - 1;
+        return (wYear * 12 + wMonth) <= transYearMonth;
+      });
+      const totalDepositsTillDate = depositsTillThisMonth.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0);
+      const totalWithdrawalsTillDate = withdrawalsTillThisMonth.reduce((sum: number, w: any) => sum + (parseFloat(w.amount) || 0), 0);
+      const totalInvestmentTillDate = totalDepositsTillDate - totalWithdrawalsTillDate;
       
       return {
         'S.No': index + 1,
@@ -407,6 +438,7 @@ export default function MasterSheet() {
         'Payment Date': paymentDate,
         'Investment Date': investmentDates || '-',
         'Deposit This Month (₹)': depositAmountThisMonth > 0 ? depositAmountThisMonth : '-',
+        'Withdrawal (₹)': withdrawalAmountThisMonth > 0 ? `${withdrawalAmountThisMonth} (${withdrawalInfo})` : '-',
         'Total Investment (₹)': totalInvestmentTillDate,
         'Return Rate (%)': (t as any).percentage_of_return || '',
         'Return Amount (₹)': Math.abs(t.amount)
@@ -416,13 +448,15 @@ export default function MasterSheet() {
     // Add summary row
     const totalReturns = statementData.reduce((sum, t) => sum + Math.abs(t.amount), 0);
     const totalDeposits = (selectedMemberDetails.deposits || []).reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0);
+    const totalWithdrawals = (selectedMemberDetails.withdrawals || []).reduce((sum: number, w: any) => sum + (parseFloat(w.amount) || 0), 0);
     excelData.push({
       'S.No': statementData.length + 1,
       'Month': 'TOTAL',
       'Payment Date': '',
       'Investment Date': '',
-      'Deposit This Month (₹)': '',
-      'Total Investment (₹)': totalDeposits,
+      'Deposit This Month (₹)': totalDeposits,
+      'Withdrawal (₹)': totalWithdrawals,
+      'Total Investment (₹)': totalDeposits - totalWithdrawals,
       'Return Rate (%)': '',
       'Return Amount (₹)': totalReturns
     });
@@ -439,6 +473,7 @@ export default function MasterSheet() {
       { wch: 20 }, // Payment Date
       { wch: 18 }, // Investment Date
       { wch: 20 }, // Deposit This Month
+      { wch: 25 }, // Withdrawal
       { wch: 20 }, // Total Investment
       { wch: 12 }, // Return Rate
       { wch: 18 }  // Return Amount
@@ -1273,6 +1308,17 @@ export default function MasterSheet() {
                     )}
                   </p>
                   <p style={{ margin: '4px 0' }}>
+                    <strong>Total Withdrawals:</strong> <span style={{ color: '#ef4444' }}>{formatCurrency(
+                      (selectedMemberDetails.withdrawals || []).reduce((sum: number, w: any) => sum + (parseFloat(w.amount) || 0), 0)
+                    )}</span>
+                  </p>
+                  <p style={{ margin: '4px 0' }}>
+                    <strong>Current Balance:</strong> <span style={{ color: '#8b5cf6', fontWeight: 700 }}>{formatCurrency(
+                      (selectedMemberDetails.deposits || []).reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0) -
+                      (selectedMemberDetails.withdrawals || []).reduce((sum: number, w: any) => sum + (parseFloat(w.amount) || 0), 0)
+                    )}</span>
+                  </p>
+                  <p style={{ margin: '4px 0' }}>
                     <strong>Total Returns:</strong> {formatCurrency(statementData.reduce((sum, t) => sum + Math.abs(t.amount), 0))}
                   </p>
                   <p style={{ margin: '4px 0' }}>
@@ -1321,6 +1367,7 @@ export default function MasterSheet() {
                       <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Payment Date</th>
                       <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Investment Date</th>
                       <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Deposit This Month</th>
+                      <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Withdrawal</th>
                       <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Total Investment</th>
                       <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Return Rate</th>
                       <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Return Amount</th>
@@ -1329,6 +1376,8 @@ export default function MasterSheet() {
                   <tbody>
                     {statementData.map((transaction, index) => {
                       const deposits = (transaction as any).deposits || [];
+                      const withdrawals = (transaction as any).withdrawals || [];
+                      const withdrawalsThisMonthDetails = (transaction as any).withdrawals_this_month || [];
                       
                       // Use month/year directly from transaction if available
                       const transYear = (transaction as any).year || new Date(transaction.date).getFullYear();
@@ -1358,8 +1407,19 @@ export default function MasterSheet() {
                         return depMonth === transMonth && depYear === transYear;
                       });
                       
-                      // Calculate deposits for this month only
+                      // Filter withdrawals made in this specific month
+                      const withdrawalsThisMonth = withdrawals.filter((w: any) => {
+                        if (!w.withdrawal_date) return false;
+                        const dateStr = String(w.withdrawal_date).split('T')[0];
+                        const parts = dateStr.split('-');
+                        const wYear = parseInt(parts[0]);
+                        const wMonth = parseInt(parts[1]) - 1;
+                        return wMonth === transMonth && wYear === transYear;
+                      });
+                      
+                      // Calculate deposits and withdrawals for this month only
                       const depositAmountThisMonth = depositsThisMonth.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0);
+                      const withdrawalAmountThisMonth = withdrawalsThisMonth.reduce((sum: number, w: any) => sum + (parseFloat(w.amount) || 0), 0);
                       
                       // Get investment dates for this month
                       const investmentDates = depositsThisMonth.map((d: any) => {
@@ -1368,7 +1428,14 @@ export default function MasterSheet() {
                         return `${parts[2]} ${monthNames[parseInt(parts[1]) - 1].substring(0, 3)} ${parts[0]}`;
                       }).join(', ');
                       
-                      // Calculate total investment till this month (cumulative)
+                      // Get withdrawal info (date and amount)
+                      const withdrawalInfo = withdrawalsThisMonth.map((w: any) => {
+                        const dateStr = String(w.withdrawal_date).split('T')[0];
+                        const parts = dateStr.split('-');
+                        return `${parts[2]} ${monthNames[parseInt(parts[1]) - 1].substring(0, 3)}: ${formatCurrency(w.amount)}`;
+                      }).join(', ');
+                      
+                      // Calculate total investment till this month (cumulative - deposits minus withdrawals)
                       const transYearMonth = transYear * 12 + transMonth;
                       const depositsTillThisMonth = deposits.filter((d: any) => {
                         if (!d.deposit_date) return false;
@@ -1378,7 +1445,17 @@ export default function MasterSheet() {
                         const depMonth = parseInt(parts[1]) - 1;
                         return (depYear * 12 + depMonth) <= transYearMonth;
                       });
-                      const totalInvestmentTillDate = depositsTillThisMonth.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0);
+                      const withdrawalsTillThisMonth = withdrawals.filter((w: any) => {
+                        if (!w.withdrawal_date) return false;
+                        const dateStr = String(w.withdrawal_date).split('T')[0];
+                        const parts = dateStr.split('-');
+                        const wYear = parseInt(parts[0]);
+                        const wMonth = parseInt(parts[1]) - 1;
+                        return (wYear * 12 + wMonth) <= transYearMonth;
+                      });
+                      const totalDepositsTillDate = depositsTillThisMonth.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0);
+                      const totalWithdrawalsTillDate = withdrawalsTillThisMonth.reduce((sum: number, w: any) => sum + (parseFloat(w.amount) || 0), 0);
+                      const totalInvestmentTillDate = totalDepositsTillDate - totalWithdrawalsTillDate;
 
                       return (
                         <tr 
@@ -1396,6 +1473,18 @@ export default function MasterSheet() {
                           </td>
                           <td style={{ padding: '12px', fontWeight: 700, color: depositAmountThisMonth > 0 ? '#10b981' : '#94a3b8' }}>
                             {depositAmountThisMonth > 0 ? formatCurrency(depositAmountThisMonth) : '-'}
+                          </td>
+                          <td style={{ padding: '12px', fontWeight: 700, color: withdrawalAmountThisMonth > 0 ? '#ef4444' : '#94a3b8' }}>
+                            {withdrawalAmountThisMonth > 0 ? (
+                              <div>
+                                <span>{formatCurrency(withdrawalAmountThisMonth)}</span>
+                                {withdrawalInfo && (
+                                  <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                                    ({withdrawalInfo})
+                                  </div>
+                                )}
+                              </div>
+                            ) : '-'}
                           </td>
                           <td style={{ padding: '12px', fontWeight: 700, color: '#8b5cf6' }}>
                             {formatCurrency(totalInvestmentTillDate)}
@@ -1429,7 +1518,7 @@ export default function MasterSheet() {
                       fontWeight: 800,
                       borderTop: '3px solid #6366f1'
                     }}>
-                      <td colSpan={7} style={{ padding: '12px', textAlign: 'right', fontSize: '16px' }}>
+                      <td colSpan={8} style={{ padding: '12px', textAlign: 'right', fontSize: '16px' }}>
                         TOTAL RETURNS:
                       </td>
                       <td style={{ padding: '12px', color: '#3b82f6', fontSize: '18px' }}>

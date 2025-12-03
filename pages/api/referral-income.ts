@@ -66,13 +66,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }));
 
       // Calculate interest earned by referred member (1-30 day cycle)
-      const interestEarned = calculateComplexInterest(
+      const result = calculateComplexInterest(
         deposits,
         withdrawals,
         defaultPercentage,
         startDate,
         endDate
       );
+      const interestEarned = result.interest;
 
       // Calculate referral income for this person
       const referralPercent = (referred as any).referral_percent || 0;

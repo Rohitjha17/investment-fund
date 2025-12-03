@@ -40,7 +40,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Calculate complex interest with clamped window
     const defaultPercentage = (member as any).percentage_of_return || 0;
     
-    const interest = calculateComplexInterest(
+    const result = calculateComplexInterest(
       deposits.map((d: any) => ({
         amount: d.amount,
         date: d.deposit_date,
@@ -62,12 +62,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(200).json({
       member_id: parseInt(member_id),
-      interest: interest,
+      interest: result.interest,
       principal: currentBalance,
       percentage: defaultPercentage,
       calculation_period: '30 days', // Hardcoded 30 days as per client requirement
       start_date: startDate.toISOString(),
-      end_date: endDate.toISOString()
+      end_date: endDate.toISOString(),
+      withdrawals_this_month: result.withdrawalDetails
     });
   } catch (error) {
     console.error('Error calculating complex interest:', error);
