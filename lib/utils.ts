@@ -117,30 +117,22 @@ export function calculateComplexInterest(
     const depositDate = new Date(segment.startDate);
     depositDate.setDate(depositDate.getDate() - 1); // Go back to actual deposit date
     
-    // Check if this deposit was made in the calculation month
-    const isDepositInThisMonth = 
-      depositDate.getMonth() === periodStart.getMonth() && 
-      depositDate.getFullYear() === periodStart.getFullYear();
+    // Use year-month number for accurate comparison (avoids timezone issues)
+    const depositYearMonth = depositDate.getFullYear() * 12 + depositDate.getMonth();
+    const periodYearMonth = periodStart.getFullYear() * 12 + periodStart.getMonth();
     
-    // Check if deposit was made AFTER this month (shouldn't calculate)
-    const isDepositAfterThisMonth = depositDate > periodEnd;
-    if (isDepositAfterThisMonth) return;
-    
-    // Check if deposit was made BEFORE this month (full 30 days)
-    const isDepositBeforeThisMonth = 
-      depositDate.getMonth() < periodStart.getMonth() || 
-      depositDate.getFullYear() < periodStart.getFullYear();
+    // Skip if deposit is after this month
+    if (depositYearMonth > periodYearMonth) return;
     
     let days: number;
-    if (isDepositBeforeThisMonth) {
-      // Deposit was before this month - FULL 30 days
+    if (depositYearMonth < periodYearMonth) {
+      // Deposit was BEFORE this month - FULL 30 days
       days = 30;
-    } else if (isDepositInThisMonth) {
-      // Deposit in this month - days = 30 - deposit_date (from next day to 30th)
-      // Example: Deposit on 12th → days = 30 - 12 = 18 days (13th to 30th)
-      days = 30 - depositDate.getDate();
     } else {
-      days = 0;
+      // Deposit is IN this month - days = 30 - deposit_date
+      // Example: Deposit on 19th → days = 30 - 19 = 11 days (20th to 30th)
+      days = 30 - depositDate.getDate();
+      if (days <= 0) days = 0; // Safety check
     }
     
     if (days > 0) {
