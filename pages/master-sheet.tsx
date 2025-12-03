@@ -6,7 +6,7 @@ import { formatDate } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 
 interface Transaction {
-  id: number;
+  id: number | string;
   transaction_type: 'deposit' | 'withdrawal' | 'return';
   member_id: number;
   member_name: string;
@@ -22,6 +22,8 @@ interface Transaction {
   withdrawal_date?: string;
   return_date?: string;
   interest_days?: number;
+  is_calculated?: boolean;
+  month_key?: string;
   deposits?: Array<{
     id: number;
     amount: number;
