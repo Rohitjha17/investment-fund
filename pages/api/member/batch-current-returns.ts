@@ -59,16 +59,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       if (depositsInCurrentMonth.length > 0) {
         // Has deposits in current month
-        const firstDeposit = depositsInCurrentMonth.sort((a: any, b: any) => 
-          new Date(a.deposit_date).getTime() - new Date(b.deposit_date).getTime()
-        )[0];
-
-        const depositDate = new Date(firstDeposit.deposit_date);
-        const startDate = new Date(depositDate);
-        startDate.setDate(startDate.getDate() + 1);
-        // Calculate until last day of current month (not hardcoded to 30th)
-        const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-        const endDate = new Date(today.getFullYear(), today.getMonth(), lastDay, 23, 59, 59, 999);
+        // IMPORTANT: Use 1st of month as periodStart
+        // calculateComplexInterest internally handles (deposit date + 1) for each deposit
+        // So old deposits will calculate from 1st, new deposits from their date + 1
 
         returnAmount = calculateComplexInterest(
           deposits.map((d: any) => ({
@@ -81,8 +74,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             date: w.withdrawal_date
           })),
           defaultPercentage,
-          startDate,
-          endDate
+          currentWindow.start, // Always use 1st of month
+          currentWindow.end
         );
       } else {
         // No deposits in current month

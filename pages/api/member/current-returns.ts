@@ -57,24 +57,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let periodInfo = '';
     let interestDays = 0;
 
+    // Get last day of current month
+    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    const monthEndDate = new Date(today.getFullYear(), today.getMonth(), lastDay, 23, 59, 59, 999);
+
     if (depositsInCurrentMonth.length > 0) {
-      // Has deposits in current month - calculate from first deposit date+1 to 30th
-      const firstDeposit = depositsInCurrentMonth.sort((a: any, b: any) => 
-        new Date(a.deposit_date).getTime() - new Date(b.deposit_date).getTime()
-      )[0];
-
-      const depositDate = new Date(firstDeposit.deposit_date);
-      const startDate = new Date(depositDate);
-      startDate.setDate(startDate.getDate() + 1); // Interest starts next day
+      // Has deposits in current month
+      // IMPORTANT: Use 1st of month as periodStart
+      // calculateComplexInterest internally handles (deposit date + 1) for each deposit
+      // So old deposits will calculate from 1st, new deposits from their date + 1
       
-      // Calculate until last day of current month (not hardcoded to 30th)
-      const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-      const endDate = new Date(today.getFullYear(), today.getMonth(), lastDay, 23, 59, 59, 999);
+      interestDays = lastDay;
 
-      // Calculate days
-      interestDays = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-
-      // Calculate interest for current month
+      // Calculate interest for current month (use 1st of month as start)
       returnAmount = calculateComplexInterest(
         deposits.map((d: any) => ({
           amount: d.amount,
@@ -88,12 +83,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           date: w.withdrawal_date
         })),
         defaultPercentage,
-        startDate,
-        endDate
+        currentWindow.start, // Always use 1st of month - the function handles deposit date + 1 internally
+        monthEndDate
       );
 
-      periodType = 'current_month_first_deposit';
-      periodInfo = `${formatDate(startDate)} to ${lastDay}th of ${today.toLocaleString('en-IN', { month: 'long', year: 'numeric' })}`;
+      periodType = 'current_month_with_new_deposits';
+      periodInfo = `1st to ${lastDay}th of ${today.toLocaleString('en-IN', { month: 'long', year: 'numeric' })} (includes new deposits)`;
     } else {
       // No deposits in current month - use full month window
       if (isPastSecond) {
@@ -179,21 +174,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       };
     });
     
-    // Determine start and end dates
-    let startDate, endDate;
-    if (depositsInCurrentMonth.length > 0) {
-      const firstDepositInMonth = depositsInCurrentMonth.sort((a: any, b: any) => 
-        new Date(a.deposit_date).getTime() - new Date(b.deposit_date).getTime()
-      )[0];
-      const firstDepositDate = new Date(firstDepositInMonth.deposit_date);
-      startDate = new Date(firstDepositDate);
-      startDate.setDate(startDate.getDate() + 1);
-      const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-      endDate = new Date(today.getFullYear(), today.getMonth(), lastDay, 23, 59, 59, 999);
-    } else {
-      startDate = currentWindow.start;
-      endDate = currentWindow.end;
-    }
+    // Use full month window for breakdown calculation
+    // calculateComplexInterest handles (deposit date + 1) internally for each deposit
+    const breakdownStartDate = currentWindow.start;
+    const breakdownEndDate = currentWindow.end;
     
     // Calculate interest for each deposit on its adjusted amount
     const depositBreakdown = adjustedDeposits.map((d: any) => {
@@ -202,6 +186,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         : defaultPercentage;
       
       // Calculate interest for this specific deposit (without withdrawals, as they're already applied)
+      // calculateComplexInterest handles (deposit date + 1) internally
       const depositInterest = calculateComplexInterest(
         [{
           amount: d.adjusted_amount,
@@ -210,8 +195,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }],
         [], // No withdrawals - already applied above
         defaultPercentage,
-        startDate,
-        endDate
+        breakdownStartDate,
+        breakdownEndDate
       );
       
       return {
