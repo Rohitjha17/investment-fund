@@ -49,6 +49,8 @@ export default function MasterSheet() {
     investmentDate: false,
     modeOfPayment: false,
     totalDeposits: false,
+    withdrawal: false,
+    accountStatus: false,
     returnRate: false,
     returnAmount: false
   });
@@ -143,6 +145,38 @@ export default function MasterSheet() {
           return null;
         }
         
+        // Calculate total deposits and withdrawals to check account status
+        const totalDeposits = (member.deposits || []).reduce((sum: number, d: any) => sum + (d.amount || 0), 0);
+        const withdrawals = member.withdrawals || [];
+        
+        // Get withdrawals before this month started
+        const withdrawalsBeforeMonth = withdrawals.filter((w: any) => {
+          const wDate = new Date(w.withdrawal_date);
+          return wDate < monthStartDate;
+        });
+        const totalWithdrawalsBeforeMonth = withdrawalsBeforeMonth.reduce((sum: number, w: any) => sum + (w.amount || 0), 0);
+        
+        // Principal at start of this month
+        const principalAtMonthStart = totalDeposits - totalWithdrawalsBeforeMonth;
+        
+        // If account was closed (balance 0) before this month started, skip this member
+        if (principalAtMonthStart <= 0) {
+          return null;
+        }
+        
+        // Get withdrawals in this month
+        const withdrawalsThisMonth = withdrawals.filter((w: any) => {
+          const wDate = new Date(w.withdrawal_date);
+          return wDate.getMonth() === monthStartDate.getMonth() && 
+                 wDate.getFullYear() === monthStartDate.getFullYear();
+        });
+        const totalWithdrawalsThisMonth = withdrawalsThisMonth.reduce((sum: number, w: any) => sum + (w.amount || 0), 0);
+        
+        // Current balance (for account status)
+        const totalWithdrawalsEver = withdrawals.reduce((sum: number, w: any) => sum + (w.amount || 0), 0);
+        const currentBalance = totalDeposits - totalWithdrawalsEver;
+        const isAccountClosed = currentBalance <= 0;
+        
         try {
           const calcRes = await fetch('/api/calculate-complex-interest', {
             method: 'POST',
@@ -156,6 +190,12 @@ export default function MasterSheet() {
           const calcData = await calcRes.json();
           
           if (calcData.interest > 0) {
+            // Get withdrawal dates for display
+            const withdrawalDates = withdrawalsThisMonth.map((w: any) => {
+              const wDate = new Date(w.withdrawal_date);
+              return `${wDate.getDate()}/${wDate.getMonth() + 1}`;
+            }).join(', ');
+            
             return {
               id: `calculated-${member.id}-${selectedMonth}`,
               type: 'return',
@@ -168,12 +208,17 @@ export default function MasterSheet() {
               town: member.town,
               percentage_of_return: member.percentage_of_return,
               deposits: member.deposits || [],
+              withdrawals: member.withdrawals || [],
               amount: calcData.interest,
               date: monthEndDate.toISOString().split('T')[0],
               interest_days: 30, // Hardcoded 30 days as per client requirement
               notes: `Calculated for ${selectedMonth}`,
               is_calculated: true,
-              month_key: selectedMonth
+              month_key: selectedMonth,
+              withdrawal_amount_this_month: totalWithdrawalsThisMonth,
+              withdrawal_dates: withdrawalDates,
+              is_account_closed: isAccountClosed,
+              current_balance: currentBalance
             };
           }
         } catch (error) {
@@ -909,7 +954,8 @@ export default function MasterSheet() {
                 onClick={() => setColumnFilters({
                   paymentDate: false, memberDetails: false, location: false,
                   investmentDate: false, modeOfPayment: false,
-                  totalDeposits: false, returnRate: false, returnAmount: false
+                  totalDeposits: false, withdrawal: false, accountStatus: false,
+                  returnRate: false, returnAmount: false
                 })}
                 className="btn btn-secondary"
                 style={{ padding: '8px 16px', fontSize: '14px' }}
@@ -920,7 +966,8 @@ export default function MasterSheet() {
                 onClick={() => setColumnFilters({
                   paymentDate: true, memberDetails: true, location: true,
                   investmentDate: true, modeOfPayment: true,
-                  totalDeposits: true, returnRate: true, returnAmount: true
+                  totalDeposits: true, withdrawal: true, accountStatus: true,
+                  returnRate: true, returnAmount: true
                 })}
                 className="btn btn-secondary"
                 style={{ padding: '8px 16px', fontSize: '14px' }}
@@ -946,6 +993,8 @@ export default function MasterSheet() {
               investmentDate: 'Date of Investment',
               modeOfPayment: 'Mode of Payment',
               totalDeposits: 'Total Deposits',
+              withdrawal: 'Withdrawal',
+              accountStatus: 'Account Status',
               returnRate: 'Return Rate',
               returnAmount: 'Return Amount'
             }).map(([key, label]) => (
@@ -1044,6 +1093,8 @@ export default function MasterSheet() {
                   {!columnFilters.investmentDate && <th>Date of Investment</th>}
                   {!columnFilters.modeOfPayment && <th>Mode of Payment</th>}
                   {!columnFilters.totalDeposits && <th>Total Deposits</th>}
+                  {!columnFilters.withdrawal && <th>Withdrawal</th>}
+                  {!columnFilters.accountStatus && <th>Account Status</th>}
                   {!columnFilters.returnRate && <th>Return Rate</th>}
                   {!columnFilters.returnAmount && <th>Return Amount</th>}
                 </tr>
@@ -1177,6 +1228,36 @@ export default function MasterSheet() {
                         {!columnFilters.totalDeposits && (
                           <td style={{ fontWeight: 700, color: '#10b981', fontSize: '16px' }}>
                             {totalDeposits > 0 ? formatCurrency(totalDeposits) : <span style={{ color: '#94a3b8' }}>₹0</span>}
+                          </td>
+                        )}
+                        {!columnFilters.withdrawal && (
+                          <td style={{ fontWeight: 600, color: (transaction as any).withdrawal_amount_this_month ? '#ef4444' : '#94a3b8' }}>
+                            {(transaction as any).withdrawal_amount_this_month ? (
+                              <div>
+                                <span>{formatCurrency((transaction as any).withdrawal_amount_this_month)}</span>
+                                {(transaction as any).withdrawal_dates && (
+                                  <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                                    ({(transaction as any).withdrawal_dates})
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span>-</span>
+                            )}
+                          </td>
+                        )}
+                        {!columnFilters.accountStatus && (
+                          <td>
+                            <span style={{
+                              background: (transaction as any).is_account_closed ? '#fef2f2' : '#f0fdf4',
+                              color: (transaction as any).is_account_closed ? '#dc2626' : '#16a34a',
+                              padding: '4px 10px',
+                              borderRadius: '6px',
+                              fontSize: '12px',
+                              fontWeight: 700
+                            }}>
+                              {(transaction as any).is_account_closed ? 'Closed' : 'Active'}
+                            </span>
                           </td>
                         )}
                         {!columnFilters.returnRate && (

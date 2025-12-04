@@ -55,9 +55,10 @@ export function isSecondOfMonth(): boolean {
 // ALWAYS clamps to provided window (full month cycle = 30 days)
 //
 // LOGIC:
-// Example: 15 lakh invested, 5 lakh withdrawn on 10th
-// - Days 1-9 (9 days): Interest on 15 lakh
-// - Days 10-30 (21 days): Interest on 10 lakh
+// Example: Deposit on 1 Jan, Withdrawal on 15 Jan
+// - Days 1-14 (14 days): Interest on full amount (withdrawal date NOT counted)
+// - Day 15: Withdrawal happens - NO interest for this day
+// - Days 16-30 (15 days): Interest on reduced amount
 export function calculateComplexInterest(
   deposits: Array<{ amount: number; date: string; percentage?: number }>,
   withdrawals: Array<{ amount: number; date: string }>,
@@ -213,24 +214,25 @@ export function calculateComplexInterest(
     }
   } else {
     // Process withdrawals and calculate interest in segments
+    // IMPORTANT: Withdrawal date is NOT counted for interest
     for (const w of withdrawalsThisMonth) {
       const withdrawalDay = w.withdrawalDay;
       
-      // Calculate interest from currentDay to withdrawalDay - 1
+      // Calculate interest from currentDay to withdrawalDay - 1 (withdrawal day NOT counted)
       if (withdrawalDay > currentDay && currentPrincipal > 0) {
-        const daysBeforeWithdrawal = withdrawalDay - currentDay;
+        const daysBeforeWithdrawal = withdrawalDay - currentDay; // e.g., 15 - 1 = 14 days (days 1-14)
         totalInterest += calculateInterestSimple(currentPrincipal, weightedRate, daysBeforeWithdrawal);
-        currentDay = withdrawalDay;
       }
       
-      // Apply withdrawal
+      // Apply withdrawal - move to day AFTER withdrawal (withdrawal day not counted)
+      currentDay = withdrawalDay + 1; // Skip withdrawal day
       currentPrincipal -= w.amount;
       if (currentPrincipal < 0) currentPrincipal = 0;
     }
     
-    // Calculate interest from last withdrawal to day 30
+    // Calculate interest from day after last withdrawal to day 30
     if (currentPrincipal > 0 && currentDay <= 30) {
-      const remainingDays = 30 - currentDay + 1;
+      const remainingDays = 30 - currentDay + 1; // e.g., 30 - 16 + 1 = 15 days (days 16-30)
       totalInterest += calculateInterestSimple(currentPrincipal, weightedRate, remainingDays);
     }
   }

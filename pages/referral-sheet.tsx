@@ -16,6 +16,10 @@ interface ReferralCommission {
     commission_amount: number;
     is_direct: boolean;
     investment_date?: string;
+    withdrawal_amount?: number;
+    withdrawal_dates?: string;
+    is_account_closed?: boolean;
+    current_balance?: number;
   }>;
 }
 
@@ -45,6 +49,8 @@ export default function ReferralSheet() {
     memberDetails: false,
     investmentDate: false,
     principalAmount: false,
+    withdrawalAmount: false,
+    accountStatus: false,
     referralPercent: false,
     commissionAmount: false
   });
@@ -167,7 +173,11 @@ export default function ReferralSheet() {
           referral_percent: breakdown.referral_percent,
           commission_amount: breakdown.commission_amount,
           is_direct: breakdown.is_direct,
-          investment_date: breakdown.investment_date
+          investment_date: breakdown.investment_date,
+          withdrawal_amount: breakdown.withdrawal_amount,
+          withdrawal_dates: breakdown.withdrawal_dates,
+          is_account_closed: breakdown.is_account_closed,
+          current_balance: breakdown.current_balance
         });
       });
     });
@@ -197,6 +207,8 @@ export default function ReferralSheet() {
       if (!columnFilters.memberDetails) rowData['Member Name'] = groupByReferrer ? `${item.member_count || 0} members` : item.member_name;
       if (!columnFilters.investmentDate) rowData['Investment Date'] = item.investment_date ? new Date(item.investment_date).toLocaleDateString('en-IN') : '-';
       if (!columnFilters.principalAmount) rowData['Principal Amount'] = groupByReferrer ? (item.total_principal || 0) : item.principal_amount;
+      if (!columnFilters.withdrawalAmount) rowData['Withdrawal'] = item.withdrawal_amount ? `₹${item.withdrawal_amount} (${item.withdrawal_dates || ''})` : '-';
+      if (!columnFilters.accountStatus) rowData['Account Status'] = item.is_account_closed ? 'Closed' : 'Active';
       if (!columnFilters.referralPercent) rowData['Referral %'] = groupByReferrer ? '-' : (item.referral_percent + '%');
       if (!columnFilters.commissionAmount) rowData['Commission Amount'] = groupByReferrer ? (item.total_commission || 0) : item.commission_amount;
       
@@ -211,7 +223,10 @@ export default function ReferralSheet() {
     if (!columnFilters.referredCount) colWidths.push({ wch: 15 });
     if (!columnFilters.totalCommission) colWidths.push({ wch: 18 });
     if (!columnFilters.memberDetails) colWidths.push({ wch: 25 });
+    if (!columnFilters.investmentDate) colWidths.push({ wch: 15 });
     if (!columnFilters.principalAmount) colWidths.push({ wch: 18 });
+    if (!columnFilters.withdrawalAmount) colWidths.push({ wch: 22 });
+    if (!columnFilters.accountStatus) colWidths.push({ wch: 15 });
     if (!columnFilters.referralPercent) colWidths.push({ wch: 15 });
     if (!columnFilters.commissionAmount) colWidths.push({ wch: 20 });
     
@@ -660,6 +675,8 @@ export default function ReferralSheet() {
               memberDetails: 'Member Details',
               investmentDate: 'Investment Date',
               principalAmount: 'Principal Amount',
+              withdrawalAmount: 'Withdrawal',
+              accountStatus: 'Account Status',
               referralPercent: 'Referral %',
               commissionAmount: 'Commission Amount'
             }).map(([key, label]) => (
@@ -725,6 +742,8 @@ export default function ReferralSheet() {
                   {!columnFilters.memberDetails && <th>Member Details</th>}
                   {!columnFilters.investmentDate && <th>Investment Date</th>}
                   {!columnFilters.principalAmount && <th>Principal Amount</th>}
+                  {!columnFilters.withdrawalAmount && <th>Withdrawal</th>}
+                  {!columnFilters.accountStatus && <th>Account Status</th>}
                   {!columnFilters.referralPercent && <th>Referral %</th>}
                   {!columnFilters.commissionAmount && <th>Commission Amount</th>}
                 </tr>
@@ -824,6 +843,42 @@ export default function ReferralSheet() {
                       {!columnFilters.principalAmount && (
                         <td style={{ fontWeight: 700, color: '#10b981', fontSize: '16px' }}>
                           {formatCurrency(groupByReferrer ? (item.total_principal || 0) : item.principal_amount)}
+                        </td>
+                      )}
+                      {!columnFilters.withdrawalAmount && (
+                        <td style={{ fontWeight: 600, color: item.withdrawal_amount ? '#ef4444' : '#94a3b8' }}>
+                          {groupByReferrer ? (
+                            <span style={{ color: '#94a3b8' }}>-</span>
+                          ) : item.withdrawal_amount ? (
+                            <div>
+                              <span>{formatCurrency(item.withdrawal_amount)}</span>
+                              {item.withdrawal_dates && (
+                                <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                                  ({item.withdrawal_dates})
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span>-</span>
+                          )}
+                        </td>
+                      )}
+                      {!columnFilters.accountStatus && (
+                        <td>
+                          {groupByReferrer ? (
+                            <span style={{ color: '#94a3b8' }}>-</span>
+                          ) : (
+                            <span style={{
+                              background: item.is_account_closed ? '#fef2f2' : '#f0fdf4',
+                              color: item.is_account_closed ? '#dc2626' : '#16a34a',
+                              padding: '4px 10px',
+                              borderRadius: '6px',
+                              fontSize: '12px',
+                              fontWeight: 700
+                            }}>
+                              {item.is_account_closed ? 'Closed' : 'Active'}
+                            </span>
+                          )}
                         </td>
                       )}
                       {!columnFilters.referralPercent && (

@@ -121,9 +121,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       
       // Principal BEFORE any withdrawals this month
       const principalBeforeThisMonth = totalDeposits - totalWithdrawalsBefore;
-      // Principal AFTER all withdrawals
+      // Principal AFTER all withdrawals (current balance)
       const principalAfterAllWithdrawals = principalBeforeThisMonth - totalWithdrawalsThisMonth;
+      
+      // Check if account is closed (all money withdrawn)
+      const allWithdrawals = (fullMember.withdrawals || []);
+      const totalWithdrawalsEver = allWithdrawals.reduce((sum: number, w: any) => sum + (w.amount || 0), 0);
+      const currentBalance = totalDeposits - totalWithdrawalsEver;
+      const isAccountClosed = currentBalance <= 0;
 
+      // Skip if principal was 0 before this month started (account was already closed)
       if (principalBeforeThisMonth <= 0) continue;
 
       // Find earliest deposit date for this member
@@ -145,6 +152,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       
       if (withdrawalsThisMonth.length > 0) {
         // There are withdrawals this month - need to calculate commission in parts
+        // IMPORTANT: Withdrawal date is NOT counted for commission
         // Sort withdrawals by date
         const sortedWithdrawals = [...withdrawalsThisMonth].sort((a: any, b: any) => 
           new Date(a.withdrawal_date).getTime() - new Date(b.withdrawal_date).getTime()
@@ -158,19 +166,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const withdrawalDay = withdrawalDate.getDate();
           
           if (withdrawalDay > currentDay && currentPrincipal > 0) {
-            // Calculate commission from currentDay to withdrawalDay - 1
+            // Calculate commission from currentDay to withdrawalDay - 1 (withdrawal day NOT counted)
             const daysBeforeWithdrawal = withdrawalDay - currentDay;
             const partialCommission = (currentPrincipal * referralPercent * daysBeforeWithdrawal) / (100 * 30);
             commissionAmount += partialCommission;
-            currentDay = withdrawalDay;
           }
           
-          // Apply withdrawal
+          // Apply withdrawal - move to day AFTER withdrawal (withdrawal day not counted)
+          currentDay = withdrawalDay + 1; // Skip withdrawal day
           currentPrincipal -= w.amount;
           if (currentPrincipal < 0) currentPrincipal = 0;
         }
         
-        // Calculate commission from last withdrawal to end of month (day 30)
+        // Calculate commission from day after last withdrawal to end of month (day 30)
         if (currentPrincipal > 0 && currentDay <= 30) {
           const remainingDays = 30 - currentDay + 1;
           const partialCommission = (currentPrincipal * referralPercent * remainingDays) / (100 * 30);
@@ -203,6 +211,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       referralCommissions[normalizedRootReferrer].total_commission += commissionAmount;
       referralCommissions[normalizedRootReferrer].referred_count += 1;
+      
+      // Calculate withdrawal info for this month
+      const withdrawalAmountThisMonth = totalWithdrawalsThisMonth;
+      const withdrawalDates = withdrawalsThisMonth.map((w: any) => {
+        const date = new Date(w.withdrawal_date);
+        return `${date.getDate()}/${date.getMonth() + 1}`;
+      }).join(', ');
+      
       referralCommissions[normalizedRootReferrer].breakdown.push({
         member_id: memberIds[i],
         member_name: (fullMember as any).name,
@@ -210,7 +226,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         referral_percent: referralPercent,
         commission_amount: commissionAmount,
         is_direct: isDirect,
-        investment_date: earliestDepositDate ? earliestDepositDate.toISOString().split('T')[0] : undefined
+        investment_date: earliestDepositDate ? earliestDepositDate.toISOString().split('T')[0] : undefined,
+        withdrawal_amount: withdrawalAmountThisMonth > 0 ? withdrawalAmountThisMonth : undefined,
+        withdrawal_dates: withdrawalDates || undefined,
+        is_account_closed: isAccountClosed,
+        current_balance: currentBalance
       });
     }
 
