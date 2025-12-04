@@ -430,11 +430,15 @@ export default function MasterSheet() {
       // Filter withdrawals made in this specific month
       const withdrawalsThisMonth = withdrawals.filter((w: any) => {
         if (!w.withdrawal_date) return false;
-        const dateStr = String(w.withdrawal_date).split('T')[0];
-        const parts = dateStr.split('-');
-        const wYear = parseInt(parts[0]);
-        const wMonth = parseInt(parts[1]) - 1;
-        return wMonth === transMonth && wYear === transYear;
+        try {
+          const wDate = new Date(w.withdrawal_date);
+          if (isNaN(wDate.getTime())) return false;
+          const wYear = wDate.getFullYear();
+          const wMonth = wDate.getMonth();
+          return wMonth === transMonth && wYear === transYear;
+        } catch {
+          return false;
+        }
       });
       
       // Calculate deposits and withdrawals for this month only
@@ -450,9 +454,13 @@ export default function MasterSheet() {
       
       // Get withdrawal info for this month
       const withdrawalInfo = withdrawalsThisMonth.map((w: any) => {
-        const dateStr = String(w.withdrawal_date).split('T')[0];
-        const parts = dateStr.split('-');
-        return `${parts[2]}-${monthNames[parseInt(parts[1]) - 1].substring(0, 3)}: ₹${w.amount}`;
+        try {
+          const wDate = new Date(w.withdrawal_date);
+          if (isNaN(wDate.getTime())) return `₹${w.amount}`;
+          return `${wDate.getDate()}-${monthNames[wDate.getMonth()].substring(0, 3)}: ₹${w.amount}`;
+        } catch {
+          return `₹${w.amount}`;
+        }
       }).join(', ');
       
       // Calculate total investment till this month (deposits - withdrawals)
@@ -467,11 +475,14 @@ export default function MasterSheet() {
       });
       const withdrawalsTillThisMonth = withdrawals.filter((w: any) => {
         if (!w.withdrawal_date) return false;
-        const dateStr = String(w.withdrawal_date).split('T')[0];
-        const parts = dateStr.split('-');
-        const wYear = parseInt(parts[0]);
-        const wMonth = parseInt(parts[1]) - 1;
-        return (wYear * 12 + wMonth) <= transYearMonth;
+        try {
+          const wDate = new Date(w.withdrawal_date);
+          if (isNaN(wDate.getTime())) return false;
+          const wYearMonth = wDate.getFullYear() * 12 + wDate.getMonth();
+          return wYearMonth <= transYearMonth;
+        } catch {
+          return false;
+        }
       });
       const totalDepositsTillDate = depositsTillThisMonth.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0);
       const totalWithdrawalsTillDate = withdrawalsTillThisMonth.reduce((sum: number, w: any) => sum + (parseFloat(w.amount) || 0), 0);
@@ -1491,11 +1502,16 @@ export default function MasterSheet() {
                       // Filter withdrawals made in this specific month
                       const withdrawalsThisMonth = withdrawals.filter((w: any) => {
                         if (!w.withdrawal_date) return false;
-                        const dateStr = String(w.withdrawal_date).split('T')[0];
-                        const parts = dateStr.split('-');
-                        const wYear = parseInt(parts[0]);
-                        const wMonth = parseInt(parts[1]) - 1;
-                        return wMonth === transMonth && wYear === transYear;
+                        try {
+                          // Handle various date formats
+                          const wDate = new Date(w.withdrawal_date);
+                          if (isNaN(wDate.getTime())) return false;
+                          const wYear = wDate.getFullYear();
+                          const wMonth = wDate.getMonth();
+                          return wMonth === transMonth && wYear === transYear;
+                        } catch {
+                          return false;
+                        }
                       });
                       
                       // Calculate deposits and withdrawals for this month only
@@ -1511,9 +1527,13 @@ export default function MasterSheet() {
                       
                       // Get withdrawal info (date and amount)
                       const withdrawalInfo = withdrawalsThisMonth.map((w: any) => {
-                        const dateStr = String(w.withdrawal_date).split('T')[0];
-                        const parts = dateStr.split('-');
-                        return `${parts[2]} ${monthNames[parseInt(parts[1]) - 1].substring(0, 3)}: ${formatCurrency(w.amount)}`;
+                        try {
+                          const wDate = new Date(w.withdrawal_date);
+                          if (isNaN(wDate.getTime())) return formatCurrency(w.amount);
+                          return `${wDate.getDate()} ${monthNames[wDate.getMonth()].substring(0, 3)}: ${formatCurrency(w.amount)}`;
+                        } catch {
+                          return formatCurrency(w.amount);
+                        }
                       }).join(', ');
                       
                       // Calculate total investment till this month (cumulative - deposits minus withdrawals)
@@ -1528,11 +1548,14 @@ export default function MasterSheet() {
                       });
                       const withdrawalsTillThisMonth = withdrawals.filter((w: any) => {
                         if (!w.withdrawal_date) return false;
-                        const dateStr = String(w.withdrawal_date).split('T')[0];
-                        const parts = dateStr.split('-');
-                        const wYear = parseInt(parts[0]);
-                        const wMonth = parseInt(parts[1]) - 1;
-                        return (wYear * 12 + wMonth) <= transYearMonth;
+                        try {
+                          const wDate = new Date(w.withdrawal_date);
+                          if (isNaN(wDate.getTime())) return false;
+                          const wYearMonth = wDate.getFullYear() * 12 + wDate.getMonth();
+                          return wYearMonth <= transYearMonth;
+                        } catch {
+                          return false;
+                        }
                       });
                       const totalDepositsTillDate = depositsTillThisMonth.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0);
                       const totalWithdrawalsTillDate = withdrawalsTillThisMonth.reduce((sum: number, w: any) => sum + (parseFloat(w.amount) || 0), 0);
