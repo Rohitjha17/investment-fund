@@ -82,13 +82,23 @@ const dbMethods = {
           amount: parseFloat(d.amount) || 0,
           deposit_date: toISO(d.deposit_date),
           percentage: d.percentage !== null && d.percentage !== undefined ? parseFloat(d.percentage) : null,
-          notes: d.notes || null
+          notes: d.notes || null,
+          mode_of_payment: d.mode_of_payment || null
+        }));
+        
+        // Format withdrawals with proper date conversion
+        const formattedWithdrawals = withdrawals.map((w: any) => ({
+          id: parseInt(w.id) || w.id,
+          amount: parseFloat(w.amount) || 0,
+          withdrawal_date: toISO(w.withdrawal_date),
+          notes: w.notes || null
         }));
 
         return {
           ...member,
           id: memberId,
           deposits: formattedDeposits,
+          withdrawals: formattedWithdrawals,
           total_deposits: totalDeposits,
           total_withdrawals: totalWithdrawals,
           total_returns: totalReturns
@@ -135,6 +145,7 @@ const dbMethods = {
           amount: parseFloat(d.amount) || 0,
           percentage: d.percentage !== null && d.percentage !== undefined ? parseFloat(d.percentage) : null,
           deposit_date: toISO(d.deposit_date),
+          mode_of_payment: d.mode_of_payment || null,
           created_at: toISO(d.created_at)
         })),
         withdrawals: withdrawals.map((w: any) => ({
