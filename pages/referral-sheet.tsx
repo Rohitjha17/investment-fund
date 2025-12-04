@@ -639,7 +639,7 @@ export default function ReferralSheet() {
               <button
                 onClick={() => setColumnFilters({
                   referrerName: false, referredCount: false, totalCommission: false, memberDetails: false, investmentDate: false,
-                  principalAmount: false, referralPercent: false, commissionAmount: false
+                  principalAmount: false, withdrawalAmount: false, accountStatus: false, referralPercent: false, commissionAmount: false
                 })}
                 className="btn btn-secondary"
                 style={{ padding: '8px 16px', fontSize: '14px' }}
@@ -649,7 +649,7 @@ export default function ReferralSheet() {
               <button
                 onClick={() => setColumnFilters({
                   referrerName: true, referredCount: true, totalCommission: true, memberDetails: true, investmentDate: true,
-                  principalAmount: true, referralPercent: true, commissionAmount: true
+                  principalAmount: true, withdrawalAmount: true, accountStatus: true, referralPercent: true, commissionAmount: true
                 })}
                 className="btn btn-secondary"
                 style={{ padding: '8px 16px', fontSize: '14px' }}
