@@ -53,6 +53,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         commission_amount: number;
         is_direct: boolean;
         investment_date?: string;
+        withdrawal_amount?: number;
+        withdrawal_dates?: string;
+        is_account_closed?: boolean;
+        current_balance?: number;
       }>;
     }> = {};
 
