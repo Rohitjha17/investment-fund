@@ -1427,6 +1427,28 @@ export default function MasterSheet() {
                     </p>
                   )}
                   <p style={{ margin: '4px 0' }}>
+                    <strong>Investment Date:</strong> <span style={{ color: '#3b82f6', fontWeight: 600 }}>{(() => {
+                      const deposits = selectedMemberDetails.deposits || [];
+                      if (deposits.length === 0) return '-';
+                      const sortedDeposits = [...deposits].sort((a: any, b: any) => 
+                        new Date(a.deposit_date).getTime() - new Date(b.deposit_date).getTime()
+                      );
+                      const firstDeposit = sortedDeposits[0];
+                      if (!firstDeposit?.deposit_date) return '-';
+                      const date = new Date(firstDeposit.deposit_date);
+                      return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+                    })()}</span>
+                  </p>
+                  <p style={{ margin: '4px 0' }}>
+                    <strong>Current Return Rate:</strong> <span style={{ 
+                      background: '#f0fdf4',
+                      color: '#166534',
+                      padding: '2px 8px',
+                      borderRadius: '6px',
+                      fontWeight: 700
+                    }}>{selectedMemberDetails.percentage_of_return || 0}%</span>
+                  </p>
+                  <p style={{ margin: '4px 0' }}>
                     <strong>Total Deposits:</strong> {formatCurrency(
                       (selectedMemberDetails.deposits || []).reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0)
                     )}
