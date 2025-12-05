@@ -16,14 +16,60 @@ interface Transaction {
 export default function Transactions() {
   const router = useRouter();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [filteredTransactions, setFilteredTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(15);
+  const [selectedMonth, setSelectedMonth] = useState<string>('all');
+  const [selectedType, setSelectedType] = useState<string>('all');
 
   useEffect(() => {
     checkAuth();
     fetchTransactions();
   }, []);
+
+  // Filter transactions when filters change
+  useEffect(() => {
+    let filtered = [...transactions];
+    
+    // Filter by month
+    if (selectedMonth !== 'all') {
+      filtered = filtered.filter((t) => {
+        const date = new Date(t.date);
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        return monthKey === selectedMonth;
+      });
+    }
+    
+    // Filter by type
+    if (selectedType !== 'all') {
+      filtered = filtered.filter((t) => {
+        const type = t.type || (t as any).transaction_type;
+        return type === selectedType;
+      });
+    }
+    
+    setFilteredTransactions(filtered);
+    setCurrentPage(1); // Reset to first page when filter changes
+  }, [transactions, selectedMonth, selectedType]);
+
+  // Get unique months from transactions
+  const getAvailableMonths = () => {
+    const months = new Set<string>();
+    transactions.forEach((t) => {
+      const date = new Date(t.date);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      months.add(monthKey);
+    });
+    return Array.from(months).sort().reverse();
+  };
+
+  const formatMonthLabel = (monthKey: string) => {
+    const [year, month] = monthKey.split('-');
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                        'July', 'August', 'September', 'October', 'November', 'December'];
+    return `${monthNames[parseInt(month) - 1]} ${year}`;
+  };
 
   const checkAuth = async () => {
     const res = await fetch('/api/auth/check');
@@ -69,11 +115,11 @@ export default function Transactions() {
     });
   };
 
-  // Pagination logic
-  const totalPages = Math.ceil(transactions.length / itemsPerPage);
+  // Pagination logic - use filtered transactions
+  const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const currentTransactions = transactions.slice(startIndex, endIndex);
+  const currentTransactions = filteredTransactions.slice(startIndex, endIndex);
 
   const renderPagination = () => {
     if (totalPages <= 1) return null;
@@ -275,6 +321,101 @@ export default function Transactions() {
           </div>
         </div>
 
+        {/* Filters Card */}
+        <div className="card" style={{ marginBottom: '24px' }}>
+          <h3 style={{ margin: '0 0 20px 0', fontSize: '20px', fontWeight: 700 }}>Filters</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
+            {/* Month Filter */}
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label style={{ fontWeight: 600, color: '#374151', marginBottom: '8px', display: 'block' }}>
+                Select Month
+              </label>
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  fontSize: '16px',
+                  border: '2px solid #e2e8f0',
+                  borderRadius: '10px',
+                  background: '#f8fafc',
+                  cursor: 'pointer',
+                  fontWeight: 500
+                }}
+              >
+                <option value="all">All Months</option>
+                {getAvailableMonths().map((month) => (
+                  <option key={month} value={month}>
+                    {formatMonthLabel(month)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Type Filter */}
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label style={{ fontWeight: 600, color: '#374151', marginBottom: '8px', display: 'block' }}>
+                Transaction Type
+              </label>
+              <select
+                value={selectedType}
+                onChange={(e) => setSelectedType(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  fontSize: '16px',
+                  border: '2px solid #e2e8f0',
+                  borderRadius: '10px',
+                  background: '#f8fafc',
+                  cursor: 'pointer',
+                  fontWeight: 500
+                }}
+              >
+                <option value="all">All Types</option>
+                <option value="deposit">Deposits</option>
+                <option value="withdrawal">Withdrawals</option>
+                <option value="return">Returns</option>
+              </select>
+            </div>
+
+            {/* Clear Filters Button */}
+            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setSelectedMonth('all');
+                  setSelectedType('all');
+                }}
+                className="btn btn-secondary"
+                style={{ 
+                  padding: '12px 24px',
+                  fontSize: '14px',
+                  fontWeight: 600
+                }}
+              >
+                Clear Filters
+              </button>
+            </div>
+          </div>
+
+          {/* Filter Summary */}
+          {(selectedMonth !== 'all' || selectedType !== 'all') && (
+            <div style={{ 
+              marginTop: '16px', 
+              padding: '12px 16px', 
+              background: '#eff6ff', 
+              borderRadius: '8px',
+              border: '1px solid #bfdbfe'
+            }}>
+              <p style={{ margin: 0, fontSize: '14px', color: '#1e40af', fontWeight: 500 }}>
+                Showing: {filteredTransactions.length} transactions
+                {selectedMonth !== 'all' && ` in ${formatMonthLabel(selectedMonth)}`}
+                {selectedType !== 'all' && ` (${selectedType}s only)`}
+              </p>
+            </div>
+          )}
+        </div>
+
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
             <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 700 }}>Transaction History</h2>
@@ -286,7 +427,7 @@ export default function Transactions() {
               borderRadius: '8px',
               fontWeight: 600
             }}>
-              Page {currentPage} of {totalPages || 1} ({transactions.length} total transactions)
+              Page {currentPage} of {totalPages || 1} ({filteredTransactions.length} transactions)
             </span>
           </div>
           
@@ -302,13 +443,27 @@ export default function Transactions() {
                 </tr>
               </thead>
               <tbody>
-                {transactions.length === 0 ? (
+                {filteredTransactions.length === 0 ? (
                   <tr>
                     <td colSpan={5} style={{ textAlign: 'center', padding: '60px 20px' }}>
                       <div style={{ fontSize: '48px', marginBottom: '16px' }}></div>
                       <p style={{ fontSize: '16px', color: '#64748b', fontWeight: 500 }}>
-                        No transactions found.
+                        {transactions.length === 0 
+                          ? 'No transactions found.' 
+                          : 'No transactions match the selected filters.'}
                       </p>
+                      {transactions.length > 0 && (
+                        <button
+                          onClick={() => {
+                            setSelectedMonth('all');
+                            setSelectedType('all');
+                          }}
+                          className="btn btn-primary"
+                          style={{ marginTop: '16px' }}
+                        >
+                          Clear Filters
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ) : (
