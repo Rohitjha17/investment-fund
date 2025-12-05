@@ -507,7 +507,7 @@ export default function MasterSheet() {
         'Deposit This Month (₹)': depositAmountThisMonth > 0 ? depositAmountThisMonth : '-',
         'Withdrawal (₹)': withdrawalAmountThisMonth > 0 ? `${withdrawalAmountThisMonth} (${withdrawalInfo})` : '-',
         'Total Investment (₹)': totalInvestmentTillDate,
-        'Return Rate (%)': (t as any).percentage_of_return || '',
+        'Current Return Rate (%)': (t as any).percentage_of_return || '',
         'Return Amount (₹)': Math.abs(t.amount)
       };
     });
@@ -524,7 +524,7 @@ export default function MasterSheet() {
       'Deposit This Month (₹)': totalDeposits,
       'Withdrawal (₹)': totalWithdrawals,
       'Total Investment (₹)': totalDeposits - totalWithdrawals,
-      'Return Rate (%)': '',
+      'Current Return Rate (%)': '',
       'Return Amount (₹)': totalReturns
     });
 
@@ -542,7 +542,7 @@ export default function MasterSheet() {
       { wch: 20 }, // Deposit This Month
       { wch: 25 }, // Withdrawal
       { wch: 20 }, // Total Investment
-      { wch: 12 }, // Return Rate
+      { wch: 20 }, // Current Return Rate
       { wch: 18 }  // Return Amount
     ];
 
@@ -750,7 +750,7 @@ export default function MasterSheet() {
         rowData['Total Deposits (₹)'] = totalDeposits;
       }
       if (!columnFilters.returnRate) {
-        rowData['Return Rate (%)'] = (t as any).percentage_of_return || '';
+        rowData['Current Return Rate (%)'] = (t as any).percentage_of_return || '';
       }
       if (!columnFilters.returnAmount) {
         rowData['Return Amount (₹)'] = Math.abs(t.amount);
@@ -779,8 +779,8 @@ export default function MasterSheet() {
     }
     if (!columnFilters.investmentDate) colWidths.push({ wch: 18 }); // Date of Investment
     if (!columnFilters.modeOfPayment) colWidths.push({ wch: 18 }); // Mode of Payment
-    if (!columnFilters.totalDeposits) colWidths.push({ wch: 18 }); // Total Deposits
-    if (!columnFilters.returnRate) colWidths.push({ wch: 12 }); // Return Rate
+    if (!columnFilters.totalDeposits) colWidths.push({ wch: 18 }); // Current Balance
+    if (!columnFilters.returnRate) colWidths.push({ wch: 20 }); // Current Return Rate
     if (!columnFilters.returnAmount) colWidths.push({ wch: 18 }); // Return Amount
     
     ws['!cols'] = colWidths;
@@ -1515,7 +1515,7 @@ export default function MasterSheet() {
                       <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Deposit This Month</th>
                       <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Withdrawal</th>
                       <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Total Investment</th>
-                      <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Return Rate</th>
+                      <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Current Return Rate</th>
                       <th style={{ padding: '12px', textAlign: 'left', fontWeight: 700 }}>Return Amount</th>
                     </tr>
                   </thead>
