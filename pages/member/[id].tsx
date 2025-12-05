@@ -155,6 +155,40 @@ export default function MemberDetail() {
     }
   };
 
+  const handleDeleteDeposit = async (depositId: number) => {
+    if (!confirm('Are you sure you want to delete this deposit? This action cannot be undone.')) return;
+
+    try {
+      const res = await fetch(`/api/deposits/${depositId}`, { method: 'DELETE' });
+      if (res.ok) {
+        fetchMember();
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        alert(`Failed to delete deposit: ${errorData.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error deleting deposit:', error);
+      alert('Failed to delete deposit. Please try again.');
+    }
+  };
+
+  const handleDeleteWithdrawal = async (withdrawalId: number) => {
+    if (!confirm('Are you sure you want to delete this withdrawal? This action cannot be undone.')) return;
+
+    try {
+      const res = await fetch(`/api/withdrawals/${withdrawalId}`, { method: 'DELETE' });
+      if (res.ok) {
+        fetchMember();
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        alert(`Failed to delete withdrawal: ${errorData.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error deleting withdrawal:', error);
+      alert('Failed to delete withdrawal. Please try again.');
+    }
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
@@ -520,6 +554,7 @@ export default function MemberDetail() {
                       <th>Interest Rate</th>
                       <th>Current Month Interest</th>
                       <th>Notes</th>
+                      <th>Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -568,6 +603,16 @@ export default function MemberDetail() {
                             {formatCurrency(currentMonthInterest)}
                           </td>
                           <td>{deposit.notes || <span style={{ color: '#94a3b8' }}>-</span>}</td>
+                          <td>
+                            <button
+                              onClick={() => handleDeleteDeposit(deposit.id)}
+                              className="btn btn-danger"
+                              style={{ padding: '6px 12px', fontSize: '12px' }}
+                              title="Delete this deposit"
+                            >
+                              Delete
+                            </button>
+                          </td>
                         </tr>
                         );
                       });
@@ -609,6 +654,7 @@ export default function MemberDetail() {
                       <th>Date</th>
                       <th>Amount</th>
                       <th>Notes</th>
+                      <th>Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -627,6 +673,16 @@ export default function MemberDetail() {
                           {formatCurrency(withdrawal.amount)}
                         </td>
                           <td>{withdrawal.notes || <span style={{ color: '#94a3b8' }}>-</span>}</td>
+                          <td>
+                            <button
+                              onClick={() => handleDeleteWithdrawal(withdrawal.id)}
+                              className="btn btn-danger"
+                              style={{ padding: '6px 12px', fontSize: '12px' }}
+                              title="Delete this withdrawal"
+                            >
+                              Delete
+                            </button>
+                          </td>
                         </tr>
                       ));
                     })()}

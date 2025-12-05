@@ -17,6 +17,7 @@ interface Member {
   total_deposits: number;
   total_withdrawals: number;
   total_returns: number;
+  current_balance?: number;
   deposits?: Array<{
     id: number;
     amount: number;
@@ -709,9 +710,9 @@ export default function Dashboard() {
               alias: 'Alias',
               location: 'Village - Town',
               investmentDate: 'Investment Date',
-              totalDeposits: 'Total Deposits',
+              totalDeposits: 'Current Balance',
               currentReturn: 'Current Month Return',
-              returnRate: 'Default Return %',
+              returnRate: 'Current Return %',
               referral: 'Referral',
               actions: 'Actions'
             }).map(([key, label]) => (
@@ -793,9 +794,9 @@ export default function Dashboard() {
                   {!columnFilters.alias && <th>Alias</th>}
                   {!columnFilters.location && <th>Village - Town</th>}
                   {!columnFilters.investmentDate && <th>Investment Date</th>}
-                  {!columnFilters.totalDeposits && <th>Total Deposits</th>}
+                  {!columnFilters.totalDeposits && <th>Current Balance</th>}
                   {!columnFilters.currentReturn && <th>Current Month Return</th>}
-                  {!columnFilters.returnRate && <th>Default Return %</th>}
+                  {!columnFilters.returnRate && <th>Current Return %</th>}
                   {!columnFilters.referral && <th>Referral</th>}
                   {!columnFilters.actions && <th>Actions</th>}
                 </tr>
@@ -869,7 +870,7 @@ export default function Dashboard() {
                       )}
                       {!columnFilters.totalDeposits && (
                         <td style={{ fontWeight: 700, color: '#10b981', fontSize: '16px' }}>
-                          {formatCurrency(member.total_deposits)}
+                          {formatCurrency(member.total_deposits - member.total_withdrawals)}
                         </td>
                       )}
                       {!columnFilters.currentReturn && (
