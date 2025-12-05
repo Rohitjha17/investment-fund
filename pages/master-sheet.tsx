@@ -420,11 +420,15 @@ export default function MasterSheet() {
       // Filter deposits made in this specific month
       const depositsThisMonth = deposits.filter((d: any) => {
         if (!d.deposit_date) return false;
-        const dateStr = String(d.deposit_date).split('T')[0];
-        const parts = dateStr.split('-');
-        const depYear = parseInt(parts[0]);
-        const depMonth = parseInt(parts[1]) - 1;
-        return depMonth === transMonth && depYear === transYear;
+        try {
+          const dDate = new Date(d.deposit_date);
+          if (isNaN(dDate.getTime())) return false;
+          const depYear = dDate.getFullYear();
+          const depMonth = dDate.getMonth();
+          return depMonth === transMonth && depYear === transYear;
+        } catch {
+          return false;
+        }
       });
       
       // Filter withdrawals made in this specific month
@@ -447,10 +451,14 @@ export default function MasterSheet() {
       
       // Get investment dates for this month
       const investmentDates = depositsThisMonth.map((d: any) => {
-        const dateStr = String(d.deposit_date).split('T')[0];
-        const parts = dateStr.split('-');
-        return `${parts[2]}-${monthNames[parseInt(parts[1]) - 1].substring(0, 3)}-${parts[0]}`;
-      }).join(', ');
+        try {
+          const dDate = new Date(d.deposit_date);
+          if (isNaN(dDate.getTime())) return '';
+          return `${dDate.getDate()}-${monthNames[dDate.getMonth()].substring(0, 3)}-${dDate.getFullYear()}`;
+        } catch {
+          return '';
+        }
+      }).filter(Boolean).join(', ');
       
       // Get withdrawal info for this month
       const withdrawalInfo = withdrawalsThisMonth.map((w: any) => {
@@ -467,11 +475,14 @@ export default function MasterSheet() {
       const transYearMonth = transYear * 12 + transMonth;
       const depositsTillThisMonth = deposits.filter((d: any) => {
         if (!d.deposit_date) return false;
-        const dateStr = String(d.deposit_date).split('T')[0];
-        const parts = dateStr.split('-');
-        const depYear = parseInt(parts[0]);
-        const depMonth = parseInt(parts[1]) - 1;
-        return (depYear * 12 + depMonth) <= transYearMonth;
+        try {
+          const dDate = new Date(d.deposit_date);
+          if (isNaN(dDate.getTime())) return false;
+          const dYearMonth = dDate.getFullYear() * 12 + dDate.getMonth();
+          return dYearMonth <= transYearMonth;
+        } catch {
+          return false;
+        }
       });
       const withdrawalsTillThisMonth = withdrawals.filter((w: any) => {
         if (!w.withdrawal_date) return false;
@@ -1513,11 +1524,15 @@ export default function MasterSheet() {
                       // Filter deposits made in this specific month
                       const depositsThisMonth = deposits.filter((d: any) => {
                         if (!d.deposit_date) return false;
-                        const dateStr = String(d.deposit_date).split('T')[0];
-                        const parts = dateStr.split('-');
-                        const depYear = parseInt(parts[0]);
-                        const depMonth = parseInt(parts[1]) - 1;
-                        return depMonth === transMonth && depYear === transYear;
+                        try {
+                          const dDate = new Date(d.deposit_date);
+                          if (isNaN(dDate.getTime())) return false;
+                          const depYear = dDate.getFullYear();
+                          const depMonth = dDate.getMonth();
+                          return depMonth === transMonth && depYear === transYear;
+                        } catch {
+                          return false;
+                        }
                       });
                       
                       // Filter withdrawals made in this specific month
@@ -1541,10 +1556,14 @@ export default function MasterSheet() {
                       
                       // Get investment dates for this month
                       const investmentDates = depositsThisMonth.map((d: any) => {
-                        const dateStr = String(d.deposit_date).split('T')[0];
-                        const parts = dateStr.split('-');
-                        return `${parts[2]} ${monthNames[parseInt(parts[1]) - 1].substring(0, 3)} ${parts[0]}`;
-                      }).join(', ');
+                        try {
+                          const dDate = new Date(d.deposit_date);
+                          if (isNaN(dDate.getTime())) return '';
+                          return `${dDate.getDate()} ${monthNames[dDate.getMonth()].substring(0, 3)} ${dDate.getFullYear()}`;
+                        } catch {
+                          return '';
+                        }
+                      }).filter(Boolean).join(', ');
                       
                       // Get withdrawal info (date and amount)
                       const withdrawalInfo = withdrawalsThisMonth.map((w: any) => {
@@ -1561,11 +1580,14 @@ export default function MasterSheet() {
                       const transYearMonth = transYear * 12 + transMonth;
                       const depositsTillThisMonth = deposits.filter((d: any) => {
                         if (!d.deposit_date) return false;
-                        const dateStr = String(d.deposit_date).split('T')[0];
-                        const parts = dateStr.split('-');
-                        const depYear = parseInt(parts[0]);
-                        const depMonth = parseInt(parts[1]) - 1;
-                        return (depYear * 12 + depMonth) <= transYearMonth;
+                        try {
+                          const dDate = new Date(d.deposit_date);
+                          if (isNaN(dDate.getTime())) return false;
+                          const dYearMonth = dDate.getFullYear() * 12 + dDate.getMonth();
+                          return dYearMonth <= transYearMonth;
+                        } catch {
+                          return false;
+                        }
                       });
                       const withdrawalsTillThisMonth = withdrawals.filter((w: any) => {
                         if (!w.withdrawal_date) return false;
