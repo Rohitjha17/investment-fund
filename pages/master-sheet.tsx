@@ -1003,10 +1003,10 @@ export default function MasterSheet() {
               location: 'Village - Town',
               investmentDate: 'Date of Investment',
               modeOfPayment: 'Mode of Payment',
-              totalDeposits: 'Total Deposits',
+              totalDeposits: 'Current Balance',
               withdrawal: 'Withdrawal',
               accountStatus: 'Account Status',
-              returnRate: 'Return Rate',
+              returnRate: 'Current Return Rate',
               returnAmount: 'Return Amount'
             }).map(([key, label]) => (
               <label key={key} style={{ 
@@ -1103,10 +1103,10 @@ export default function MasterSheet() {
                   {!columnFilters.location && <th>Village - Town</th>}
                   {!columnFilters.investmentDate && <th>Date of Investment</th>}
                   {!columnFilters.modeOfPayment && <th>Mode of Payment</th>}
-                  {!columnFilters.totalDeposits && <th>Total Deposits</th>}
+                  {!columnFilters.totalDeposits && <th>Current Balance</th>}
                   {!columnFilters.withdrawal && <th>Withdrawal</th>}
                   {!columnFilters.accountStatus && <th>Account Status</th>}
-                  {!columnFilters.returnRate && <th>Return Rate</th>}
+                  {!columnFilters.returnRate && <th>Current Return Rate</th>}
                   {!columnFilters.returnAmount && <th>Return Amount</th>}
                 </tr>
               </thead>
@@ -1133,6 +1133,14 @@ export default function MasterSheet() {
                     const totalDeposits = (transaction as any).deposits && (transaction as any).deposits.length > 0
                       ? (transaction as any).deposits.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0)
                       : 0;
+                    
+                    // Calculate total withdrawals
+                    const totalWithdrawals = (transaction as any).withdrawals && (transaction as any).withdrawals.length > 0
+                      ? (transaction as any).withdrawals.reduce((sum: number, w: any) => sum + (parseFloat(w.amount) || 0), 0)
+                      : 0;
+                    
+                    // Calculate current balance
+                    const currentBalance = totalDeposits - totalWithdrawals;
                     
                     // Get month and year from transaction date
                     const transDate = new Date(transaction.date);
@@ -1174,9 +1182,22 @@ export default function MasterSheet() {
                           <td>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span style={{ fontWeight: 700, color: '#1e293b', fontSize: '15px' }}>
+                                <button
+                                  onClick={() => router.push(`/member/${(transaction as any).member_id || transaction.id}`)}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    fontWeight: 700,
+                                    color: '#3b82f6',
+                                    fontSize: '15px',
+                                    cursor: 'pointer',
+                                    textDecoration: 'underline',
+                                    padding: 0
+                                  }}
+                                  title="View member profile"
+                                >
                                   {transaction.member_name}
-                                </span>
+                                </button>
                                 {transaction.unique_number && (
                                   <span style={{
                                     background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
@@ -1237,8 +1258,8 @@ export default function MasterSheet() {
                           </td>
                         )}
                         {!columnFilters.totalDeposits && (
-                          <td style={{ fontWeight: 700, color: '#10b981', fontSize: '16px' }}>
-                            {totalDeposits > 0 ? formatCurrency(totalDeposits) : <span style={{ color: '#94a3b8' }}>₹0</span>}
+                          <td style={{ fontWeight: 700, color: currentBalance > 0 ? '#10b981' : '#94a3b8', fontSize: '16px' }}>
+                            {currentBalance > 0 ? formatCurrency(currentBalance) : <span style={{ color: '#94a3b8' }}>₹0</span>}
                           </td>
                         )}
                         {!columnFilters.withdrawal && (
