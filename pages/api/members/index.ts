@@ -37,20 +37,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ error: 'Name and percentage of return are required' });
       }
 
-      // Check for duplicate names and aliases
+      // Check for duplicate name + alias combination
       const allMembers = await db.getMembers();
       
-      // Check for duplicate name (alias name can be duplicate - multiple people can have same alias)
-      const duplicateName = allMembers.find((m: any) => 
-        m.name && m.name.toLowerCase().trim() === name.toLowerCase().trim()
-      );
-      if (duplicateName) {
+      // Allow same name if alias is different
+      // Example: "Rakesh" with alias "Mohan" and "Rakesh" with alias "Gupta" are allowed
+      const inputName = name.toLowerCase().trim();
+      const inputAlias = (alias_name || '').toLowerCase().trim();
+      
+      const duplicateMember = allMembers.find((m: any) => {
+        const existingName = (m.name || '').toLowerCase().trim();
+        const existingAlias = (m.alias_name || '').toLowerCase().trim();
+        
+        // Check if both name AND alias match (exact duplicate)
+        return existingName === inputName && existingAlias === inputAlias;
+      });
+      
+      if (duplicateMember) {
+        const aliasInfo = alias_name ? ` with alias "${alias_name}"` : ' (no alias)';
         return res.status(400).json({ 
-          error: `A member with the name "${name}" already exists. Please use a different name.` 
+          error: `A member with the name "${name}"${aliasInfo} already exists. Please use a different name or alias.` 
         });
       }
-
-      // Removed alias name uniqueness check - alias names can be duplicate
 
       // Create member (date_of_return defaults to 30 if not provided)
       const member = await db.createMember({
