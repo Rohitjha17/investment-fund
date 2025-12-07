@@ -202,6 +202,12 @@ export function calculateComplexInterest(
   }
 
   // Step 6: Calculate interest in time segments
+  // LOGIC FOR WITHDRAWALS:
+  // - Withdrawn amount gets interest for days from start to (withdrawal day - 1) - withdrawal day NOT counted
+  // - Remaining amount gets interest for the FULL month (30 days) - not affected by withdrawal
+  // Example: 8 lakh total, 2 lakh withdrawal on 12th
+  // - 2 lakh gets interest for 11 days (days 1-11, 12th not counted)
+  // - 6 lakh gets interest for 30 days (full month)
   let totalInterest = 0;
   let currentPrincipal = totalPrincipalStart;
   let currentDay = interestStartDay;
@@ -213,27 +219,35 @@ export function calculateComplexInterest(
       totalInterest = calculateInterestSimple(currentPrincipal, weightedRate, days);
     }
   } else {
-    // Process withdrawals and calculate interest in segments
+    // Process withdrawals and calculate interest
+    // LOGIC: 
+    // - Each withdrawn amount gets interest from start day to (withdrawal day - 1) - withdrawal day NOT counted
+    // - Remaining amount after all withdrawals gets interest for FULL month (30 days) - not affected by withdrawals
     // IMPORTANT: Withdrawal date is NOT counted for interest
+    let remainingPrincipal = currentPrincipal;
+    
     for (const w of withdrawalsThisMonth) {
       const withdrawalDay = w.withdrawalDay;
+      const withdrawalAmount = Math.min(w.amount, remainingPrincipal);
       
-      // Calculate interest from currentDay to withdrawalDay - 1 (withdrawal day NOT counted)
-      if (withdrawalDay > currentDay && currentPrincipal > 0) {
-        const daysBeforeWithdrawal = withdrawalDay - currentDay; // e.g., 15 - 1 = 14 days (days 1-14)
-        totalInterest += calculateInterestSimple(currentPrincipal, weightedRate, daysBeforeWithdrawal);
+      // Calculate interest for withdrawn amount: from interestStartDay to withdrawalDay - 1 (withdrawal day NOT counted)
+      if (withdrawalDay >= interestStartDay && withdrawalAmount > 0) {
+        const daysBeforeWithdrawal = withdrawalDay - interestStartDay; // e.g., 12 - 1 = 11 days (days 1-11)
+        if (daysBeforeWithdrawal > 0) {
+          totalInterest += calculateInterestSimple(withdrawalAmount, weightedRate, daysBeforeWithdrawal);
+        }
       }
       
-      // Apply withdrawal - move to day AFTER withdrawal (withdrawal day not counted)
-      currentDay = withdrawalDay + 1; // Skip withdrawal day
-      currentPrincipal -= w.amount;
-      if (currentPrincipal < 0) currentPrincipal = 0;
+      // Reduce remaining principal
+      remainingPrincipal -= withdrawalAmount;
+      if (remainingPrincipal < 0) remainingPrincipal = 0;
     }
     
-    // Calculate interest from day after last withdrawal to day 30
-    if (currentPrincipal > 0 && currentDay <= 30) {
-      const remainingDays = 30 - currentDay + 1; // e.g., 30 - 16 + 1 = 15 days (days 16-30)
-      totalInterest += calculateInterestSimple(currentPrincipal, weightedRate, remainingDays);
+    // Calculate interest for remaining amount: FULL month (30 days) - not affected by withdrawal
+    // This is the key: remaining amount gets interest for the full month, not just from after withdrawal
+    if (remainingPrincipal > 0) {
+      const fullMonthDays = 30 - interestStartDay + 1; // Full month from start day
+      totalInterest += calculateInterestSimple(remainingPrincipal, weightedRate, fullMonthDays);
     }
   }
 
